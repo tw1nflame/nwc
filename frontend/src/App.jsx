@@ -211,16 +211,19 @@ function PredictForm({ config, onSubmit, trainStatus }) {
           ${trainStatus?.status === 'running' || trainStatus?.status === 'pending' ? 'bg-blue-100 text-blue-800 border border-blue-300' : ''}
           ${trainStatus?.status === 'done' ? 'bg-green-100 text-green-800 border border-green-300' : ''}
           ${trainStatus?.status === 'error' ? 'bg-red-100 text-red-800 border border-red-300' : ''}
+          ${trainStatus?.status === 'revoked' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : ''}
           ${(trainStatus?.status === 'idle' || trainStatus?.status === 'not_found' || !trainStatus) ? 'bg-gray-100 text-gray-700 border border-gray-300' : ''}
         `}>
           <span className="inline-block w-2 h-2 rounded-full mr-2"
             style={{background:
               trainStatus?.status === 'running' || trainStatus?.status === 'pending' ? '#2563eb' :
               trainStatus?.status === 'done' ? '#22c55e' :
-              trainStatus?.status === 'error' ? '#ef4444' : '#64748b'}}></span>
+              trainStatus?.status === 'error' ? '#ef4444' :
+              trainStatus?.status === 'revoked' ? '#eab308' : '#64748b'}}></span>
           {(trainStatus?.status === 'running' || trainStatus?.status === 'pending') && 'Обучение запущено...'}
           {trainStatus?.status === 'done' && 'Обучение завершено!'}
           {trainStatus?.status === 'error' && 'Ошибка при обучении'}
+          {trainStatus?.status === 'revoked' && 'Обучение было остановлено'}
           {(trainStatus?.status === 'idle' || trainStatus?.status === 'not_found' || !trainStatus) && 'Ожидание запуска'}
           {trainStatus?.result_file && trainStatus?.status === 'done' && (
             <span className="ml-4 text-blue-700">Файл результата: {trainStatus.result_file}</span>

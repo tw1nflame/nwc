@@ -27396,3 +27396,568 @@ AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
 Starting training. Start time is 2025-07-30 16:38:25
 2025-07-30 16:38:25 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['PatchTST']
 2025-07-30 16:38:25 - autogluon.timeseries.trainer - INFO - Training timeseries model PatchTST. 
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - 	-10673.3670   = Validation score (-MAE)
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - 	52.94   s     = Training runtime
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['PatchTST']
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Total runtime: 52.97 s
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Best model: PatchTST
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Best model score: -10673.3670
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: PatchTST
+2025-07-30 16:39:18 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:39:18 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:39:18 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Прочая ДЗ_January2025_MAE"
+2025-07-30 16:39:18 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Прочая ДЗ_January2025_MAE'
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       4.17 GB / 13.86 GB (30.1%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'Chronos': {'ag_args': {'name_suffix': 'ZeroShot'},
+                                 'model_path': 'pretrained_models/chronos-bolt-base'}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Прочая ДЗ',
+ 'verbosity': 2}
+
+2025-07-30 16:39:18 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:39:18 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:39:18 - autogluon.timeseries.utils.features - INFO - 	target: 'Прочая ДЗ'
+2025-07-30 16:39:18 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:39:18 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:39:18 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:39:18
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['ChronosZeroShot[pretrained_models__chronos-bolt-base]']
+2025-07-30 16:39:18 - autogluon.timeseries.trainer - INFO - Training timeseries model ChronosZeroShot[pretrained_models__chronos-bolt-base]. 
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - 	-125803.6487  = Validation score (-MAE)
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - 	0.65    s     = Training runtime
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - 	0.56    s     = Validation (prediction) runtime
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['ChronosZeroShot[pretrained_models__chronos-bolt-base]']
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - Total runtime: 1.22 s
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - Best model: ChronosZeroShot[pretrained_models__chronos-bolt-base]
+2025-07-30 16:39:19 - autogluon.timeseries.trainer - INFO - Best model score: -125803.6487
+2025-07-30 16:39:20 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: ChronosZeroShot[pretrained_models__chronos-bolt-base]
+2025-07-30 16:39:21 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:39:21 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:39:21 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE"
+2025-07-30 16:39:21 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE'
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       4.12 GB / 13.86 GB (29.7%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'AutoARIMAModel': {},
+                     'AutoETSModel': {},
+                     'AverageModel': {},
+                     'CrostonModel': {},
+                     'DeepARModel': {},
+                     'DirectTabularModel': {},
+                     'NPTSModel': {},
+                     'NaiveModel': {},
+                     'PatchTSTModel': {},
+                     'RecursiveTabularModel': {},
+                     'SeasonalAverageModel': {},
+                     'SeasonalNaiveModel': {},
+                     'TemporalFusionTransformerModel': {},
+                     'ThetaModel': {},
+                     'TiDEModel': {},
+                     'ZeroModel': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Авансы выданные и расходы будущих периодов',
+ 'verbosity': 2}
+
+2025-07-30 16:39:21 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:39:21 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:39:21 - autogluon.timeseries.utils.features - INFO - 	target: 'Авансы выданные и расходы будущих периодов'
+2025-07-30 16:39:22 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:39:22 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:39:22 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:39:22 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:39:22
+2025-07-30 16:39:22 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['Naive', 'SeasonalNaive', 'Average', 'SeasonalAverage', 'Zero', 'RecursiveTabular', 'DirectTabular', 'Croston', 'NPTS', 'Theta', 'AutoETS', 'AutoARIMA', 'TemporalFusionTransformer', 'DeepAR', 'PatchTST', 'TiDE']
+2025-07-30 16:39:22 - autogluon.timeseries.trainer - INFO - Training timeseries model Naive. 
+2025-07-30 16:39:29 - autogluon.timeseries.trainer - INFO - 	-216021.3324  = Validation score (-MAE)
+2025-07-30 16:39:29 - autogluon.timeseries.trainer - INFO - 	3.98    s     = Training runtime
+2025-07-30 16:39:29 - autogluon.timeseries.trainer - INFO - 	3.36    s     = Validation (prediction) runtime
+2025-07-30 16:39:29 - autogluon.timeseries.trainer - INFO - Training timeseries model SeasonalNaive. 
+2025-07-30 16:39:36 - autogluon.timeseries.trainer - INFO - 	-230528.2822  = Validation score (-MAE)
+2025-07-30 16:39:36 - autogluon.timeseries.trainer - INFO - 	3.38    s     = Training runtime
+2025-07-30 16:39:36 - autogluon.timeseries.trainer - INFO - 	3.41    s     = Validation (prediction) runtime
+2025-07-30 16:39:36 - autogluon.timeseries.trainer - INFO - Training timeseries model Average. 
+2025-07-30 16:39:42 - autogluon.timeseries.trainer - INFO - 	-188383.0282  = Validation score (-MAE)
+2025-07-30 16:39:42 - autogluon.timeseries.trainer - INFO - 	3.28    s     = Training runtime
+2025-07-30 16:39:42 - autogluon.timeseries.trainer - INFO - 	3.57    s     = Validation (prediction) runtime
+2025-07-30 16:39:42 - autogluon.timeseries.trainer - INFO - Training timeseries model SeasonalAverage. 
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	-143269.9840  = Validation score (-MAE)
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	0.06    s     = Training runtime
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	0.05    s     = Validation (prediction) runtime
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - Training timeseries model Zero. 
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	-209729.4295  = Validation score (-MAE)
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	0.03    s     = Training runtime
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - 	0.02    s     = Validation (prediction) runtime
+2025-07-30 16:39:43 - autogluon.timeseries.trainer - INFO - Training timeseries model RecursiveTabular. 
+2025-07-30 16:39:44 - autogluon.timeseries.trainer - INFO - 	-308435.8915  = Validation score (-MAE)
+2025-07-30 16:39:44 - autogluon.timeseries.trainer - INFO - 	0.96    s     = Training runtime
+2025-07-30 16:39:44 - autogluon.timeseries.trainer - INFO - 	0.03    s     = Validation (prediction) runtime
+2025-07-30 16:39:44 - autogluon.timeseries.trainer - INFO - Training timeseries model DirectTabular. 
+2025-07-30 16:39:45 - autogluon.timeseries.trainer - INFO - 	-204618.6486  = Validation score (-MAE)
+2025-07-30 16:39:45 - autogluon.timeseries.trainer - INFO - 	1.03    s     = Training runtime
+2025-07-30 16:39:45 - autogluon.timeseries.trainer - INFO - 	0.04    s     = Validation (prediction) runtime
+2025-07-30 16:39:45 - autogluon.timeseries.trainer - INFO - Training timeseries model Croston. 
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	-184774.4700  = Validation score (-MAE)
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	1.52    s     = Training runtime
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	1.47    s     = Validation (prediction) runtime
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - Training timeseries model NPTS. 
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	-230528.2822  = Validation score (-MAE)
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	0.04    s     = Training runtime
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:39:48 - autogluon.timeseries.trainer - INFO - Training timeseries model Theta. 
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	-184755.6832  = Validation score (-MAE)
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	0.97    s     = Training runtime
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	0.93    s     = Validation (prediction) runtime
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - Training timeseries model AutoETS. 
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	-185046.2460  = Validation score (-MAE)
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	0.04    s     = Training runtime
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - 	0.03    s     = Validation (prediction) runtime
+2025-07-30 16:39:50 - autogluon.timeseries.trainer - INFO - Training timeseries model AutoARIMA. 
+2025-07-30 16:39:53 - autogluon.timeseries.trainer - INFO - 	-178576.6683  = Validation score (-MAE)
+2025-07-30 16:39:53 - autogluon.timeseries.trainer - INFO - 	1.62    s     = Training runtime
+2025-07-30 16:39:53 - autogluon.timeseries.trainer - INFO - 	1.59    s     = Validation (prediction) runtime
+2025-07-30 16:39:53 - autogluon.timeseries.trainer - INFO - Training timeseries model TemporalFusionTransformer. 
+2025-07-30 16:42:40 - autogluon.timeseries.trainer - INFO - 	-114515.9957  = Validation score (-MAE)
+2025-07-30 16:42:40 - autogluon.timeseries.trainer - INFO - 	167.09  s     = Training runtime
+2025-07-30 16:42:40 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:42:40 - autogluon.timeseries.trainer - INFO - Training timeseries model DeepAR. 
+2025-07-30 16:43:25 - autogluon.timeseries.trainer - INFO - 	-288670.5705  = Validation score (-MAE)
+2025-07-30 16:43:25 - autogluon.timeseries.trainer - INFO - 	44.78   s     = Training runtime
+2025-07-30 16:43:25 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:43:25 - autogluon.timeseries.trainer - INFO - Training timeseries model PatchTST. 
+2025-07-30 16:44:25 - autogluon.timeseries.trainer - INFO - 	-202169.5426  = Validation score (-MAE)
+2025-07-30 16:44:25 - autogluon.timeseries.trainer - INFO - 	59.87   s     = Training runtime
+2025-07-30 16:44:25 - autogluon.timeseries.trainer - INFO - 	0.02    s     = Validation (prediction) runtime
+2025-07-30 16:44:25 - autogluon.timeseries.trainer - INFO - Training timeseries model TiDE. 
+2025-07-30 16:46:27 - autogluon.timeseries.trainer - INFO - 	-447982.7301  = Validation score (-MAE)
+2025-07-30 16:46:27 - autogluon.timeseries.trainer - INFO - 	121.63  s     = Training runtime
+2025-07-30 16:46:27 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:46:27 - autogluon.timeseries.trainer - INFO - Fitting simple weighted ensemble.
+2025-07-30 16:46:28 - autogluon.timeseries.models.ensemble.greedy - INFO - 	Ensemble weights: {'DirectTabular': 0.35, 'TemporalFusionTransformer': 0.65}
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - 	-110120.4330  = Validation score (-MAE)
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - 	1.01    s     = Training runtime
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - 	0.05    s     = Validation (prediction) runtime
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['Naive', 'SeasonalNaive', 'Average', 'SeasonalAverage', 'Zero', 'RecursiveTabular', 'DirectTabular', 'Croston', 'NPTS', 'Theta', 'AutoETS', 'AutoARIMA', 'TemporalFusionTransformer', 'DeepAR', 'PatchTST', 'TiDE', 'WeightedEnsemble']
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - Total runtime: 426.15 s
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - Best model: WeightedEnsemble
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - Best model score: -110120.4330
+2025-07-30 16:46:28 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble
+2025-07-30 16:46:28 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:46:28 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:46:29 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE"
+2025-07-30 16:46:29 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE'
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       3.55 GB / 13.86 GB (25.6%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'AutoARIMA': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Авансы выданные и расходы будущих периодов',
+ 'verbosity': 2}
+
+2025-07-30 16:46:29 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:46:29 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:46:29 - autogluon.timeseries.utils.features - INFO - 	target: 'Авансы выданные и расходы будущих периодов'
+2025-07-30 16:46:29 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:46:29 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:46:29 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:46:29 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:46:29
+2025-07-30 16:46:29 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['AutoARIMA']
+2025-07-30 16:46:29 - autogluon.timeseries.trainer - INFO - Training timeseries model AutoARIMA. 
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - 	-178576.6683  = Validation score (-MAE)
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - 	6.10    s     = Training runtime
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - 	5.29    s     = Validation (prediction) runtime
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['AutoARIMA']
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Total runtime: 11.40 s
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Best model: AutoARIMA
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Best model score: -178576.6683
+2025-07-30 16:46:41 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: AutoARIMA
+2025-07-30 16:46:46 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:46:46 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:46:47 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE"
+2025-07-30 16:46:47 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE'
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       3.50 GB / 13.86 GB (25.3%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'TemporalFusionTransformerModel': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Авансы выданные и расходы будущих периодов',
+ 'verbosity': 2}
+
+2025-07-30 16:46:47 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:46:47 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:46:47 - autogluon.timeseries.utils.features - INFO - 	target: 'Авансы выданные и расходы будущих периодов'
+2025-07-30 16:46:47 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:46:47 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:46:47 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:46:47 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:46:47
+2025-07-30 16:46:47 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['TemporalFusionTransformer']
+2025-07-30 16:46:47 - autogluon.timeseries.trainer - INFO - Training timeseries model TemporalFusionTransformer. 
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - 	-112582.6486  = Validation score (-MAE)
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - 	180.71  s     = Training runtime
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['TemporalFusionTransformer']
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Total runtime: 180.78 s
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Best model: TemporalFusionTransformer
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Best model score: -112582.6486
+2025-07-30 16:49:48 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: TemporalFusionTransformer
+2025-07-30 16:49:48 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:49:48 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:49:49 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE"
+2025-07-30 16:49:49 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE'
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       3.52 GB / 13.86 GB (25.4%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'PatchTSTModel': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Авансы выданные и расходы будущих периодов',
+ 'verbosity': 2}
+
+2025-07-30 16:49:49 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:49:49 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:49:49 - autogluon.timeseries.utils.features - INFO - 	target: 'Авансы выданные и расходы будущих периодов'
+2025-07-30 16:49:49 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:49:49 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:49:49 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:49:49 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:49:49
+2025-07-30 16:49:49 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['PatchTST']
+2025-07-30 16:49:49 - autogluon.timeseries.trainer - INFO - Training timeseries model PatchTST. 
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - 	-216265.9767  = Validation score (-MAE)
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - 	55.15   s     = Training runtime
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - 	0.01    s     = Validation (prediction) runtime
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['PatchTST']
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Total runtime: 55.19 s
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Best model: PatchTST
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Best model score: -216265.9767
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: PatchTST
+2025-07-30 16:50:44 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:50:44 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:50:44 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE"
+2025-07-30 16:50:44 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Авансы выданные и расходы будущих периодов_January2025_MAE'
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       4.21 GB / 13.86 GB (30.4%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'Chronos': {'ag_args': {'name_suffix': 'ZeroShot'},
+                                 'model_path': 'pretrained_models/chronos-bolt-base'}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Авансы выданные и расходы будущих периодов',
+ 'verbosity': 2}
+
+2025-07-30 16:50:44 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:50:44 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:50:44 - autogluon.timeseries.utils.features - INFO - 	target: 'Авансы выданные и расходы будущих периодов'
+2025-07-30 16:50:44 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:50:44 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:50:44 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:50:44
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['ChronosZeroShot[pretrained_models__chronos-bolt-base]']
+2025-07-30 16:50:44 - autogluon.timeseries.trainer - INFO - Training timeseries model ChronosZeroShot[pretrained_models__chronos-bolt-base]. 
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - 	-182862.4957  = Validation score (-MAE)
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - 	0.68    s     = Training runtime
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - 	0.60    s     = Validation (prediction) runtime
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Not fitting ensemble as only 1 model was trained.
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Training complete. Models trained: ['ChronosZeroShot[pretrained_models__chronos-bolt-base]']
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Total runtime: 1.30 s
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Best model: ChronosZeroShot[pretrained_models__chronos-bolt-base]
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Best model score: -182862.4957
+2025-07-30 16:50:46 - autogluon.timeseries.trainer - INFO - Model not specified in predict, will default to the model with the best validation score: ChronosZeroShot[pretrained_models__chronos-bolt-base]
+2025-07-30 16:50:47 - py.warnings - WARNING - D:\work\nwc\utils\predictors.py:95: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  pd.date_range(df_ts['timestamp'].min(), last_month, freq='M')
+
+2025-07-30 16:50:47 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\dataset\ts_dataframe.py:1071: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(freq)
+
+2025-07-30 16:50:48 - autogluon.common.utils.utils - WARNING - Warning: path already exists! This predictor may overwrite an existing predictor! path="models/ALL/base_ALL_INDIVIDUAL_Прочие налоги к возмещению ST_January2025_MAE"
+2025-07-30 16:50:48 - py.warnings - WARNING - D:\work\nwc\.venv\Lib\site-packages\autogluon\timeseries\predictor.py:198: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  offset = pd.tseries.frequencies.to_offset(self.freq)
+
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - Frequency 'M' stored as 'ME'
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - Beginning AutoGluon training...
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - AutoGluon will save models to 'D:\work\nwc\models\ALL\base_ALL_INDIVIDUAL_Прочие налоги к возмещению ST_January2025_MAE'
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - =================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.11.12
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.19045
+CPU Count:          12
+GPU Count:          0
+Memory Avail:       4.20 GB / 13.86 GB (30.3%)
+Disk Space Avail:   812.64 GB / 931.50 GB (87.2%)
+===================================================
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - Setting presets to: best_quality
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - 
+Fitting with arguments:
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - {'enable_ensemble': True,
+ 'eval_metric': MAE,
+ 'freq': 'ME',
+ 'hyperparameters': {'AutoARIMAModel': {},
+                     'AutoETSModel': {},
+                     'AverageModel': {},
+                     'CrostonModel': {},
+                     'DeepARModel': {},
+                     'DirectTabularModel': {},
+                     'NPTSModel': {},
+                     'NaiveModel': {},
+                     'PatchTSTModel': {},
+                     'RecursiveTabularModel': {},
+                     'SeasonalAverageModel': {},
+                     'SeasonalNaiveModel': {},
+                     'TemporalFusionTransformerModel': {},
+                     'ThetaModel': {},
+                     'TiDEModel': {},
+                     'ZeroModel': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 2,
+ 'prediction_length': 1,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'Прочие налоги к возмещению ST',
+ 'verbosity': 2}
+
+2025-07-30 16:50:48 - autogluon.timeseries - INFO - Provided train_data has 65 rows, 1 time series. Median time series length is 65 (min=65, max=65). 
+2025-07-30 16:50:48 - autogluon.timeseries.utils.features - INFO - 
+Provided data contains following columns:
+2025-07-30 16:50:48 - autogluon.timeseries.utils.features - INFO - 	target: 'Прочие налоги к возмещению ST'
+2025-07-30 16:50:48 - autogluon.timeseries.learner - INFO - 
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+2025-07-30 16:50:48 - autogluon.timeseries.learner - INFO - 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+2025-07-30 16:50:48 - autogluon.timeseries.learner - INFO - ===================================================
+2025-07-30 16:50:48 - autogluon.timeseries.trainer - INFO - 
+Starting training. Start time is 2025-07-30 16:50:48
+2025-07-30 16:50:48 - autogluon.timeseries.trainer - INFO - Models that will be trained: ['Naive', 'SeasonalNaive', 'Average', 'SeasonalAverage', 'Zero', 'RecursiveTabular', 'DirectTabular', 'Croston', 'NPTS', 'Theta', 'AutoETS', 'AutoARIMA', 'TemporalFusionTransformer', 'DeepAR', 'PatchTST', 'TiDE']
+2025-07-30 16:50:48 - autogluon.timeseries.trainer - INFO - Training timeseries model Naive. 
+2025-07-30 16:50:55 - autogluon.timeseries.trainer - INFO - 	-2696102.0374 = Validation score (-MAE)
+2025-07-30 16:50:55 - autogluon.timeseries.trainer - INFO - 	4.24    s     = Training runtime
+2025-07-30 16:50:55 - autogluon.timeseries.trainer - INFO - 	3.35    s     = Validation (prediction) runtime
+2025-07-30 16:50:55 - autogluon.timeseries.trainer - INFO - Training timeseries model SeasonalNaive. 
+2025-07-30 16:51:02 - autogluon.timeseries.trainer - INFO - 	-2461685.9851 = Validation score (-MAE)
+2025-07-30 16:51:02 - autogluon.timeseries.trainer - INFO - 	3.38    s     = Training runtime
+2025-07-30 16:51:02 - autogluon.timeseries.trainer - INFO - 	3.38    s     = Validation (prediction) runtime
+2025-07-30 16:51:02 - autogluon.timeseries.trainer - INFO - Training timeseries model Average. 
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	-2130790.7041 = Validation score (-MAE)
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	3.41    s     = Training runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	3.49    s     = Validation (prediction) runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - Training timeseries model SeasonalAverage. 
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	-2444464.3494 = Validation score (-MAE)
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	0.08    s     = Training runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	0.05    s     = Validation (prediction) runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - Training timeseries model Zero. 
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	-2709467.2388 = Validation score (-MAE)
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	0.04    s     = Training runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - 	0.02    s     = Validation (prediction) runtime
+2025-07-30 16:51:09 - autogluon.timeseries.trainer - INFO - Training timeseries model RecursiveTabular. 
+2025-07-30 16:51:11 - autogluon.timeseries.trainer - INFO - 	-1727577.4676 = Validation score (-MAE)
+2025-07-30 16:51:11 - autogluon.timeseries.trainer - INFO - 	1.62    s     = Training runtime
+2025-07-30 16:51:11 - autogluon.timeseries.trainer - INFO - 	0.05    s     = Validation (prediction) runtime
+2025-07-30 16:51:11 - autogluon.timeseries.trainer - INFO - Training timeseries model DirectTabular. 
+2025-07-30 16:51:12 - autogluon.timeseries.trainer - INFO - 	-2010287.6138 = Validation score (-MAE)
+2025-07-30 16:51:12 - autogluon.timeseries.trainer - INFO - 	1.03    s     = Training runtime
+2025-07-30 16:51:12 - autogluon.timeseries.trainer - INFO - 	0.04    s     = Validation (prediction) runtime
+2025-07-30 16:51:12 - autogluon.timeseries.trainer - INFO - Training timeseries model Croston. 
