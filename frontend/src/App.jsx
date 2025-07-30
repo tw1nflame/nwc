@@ -260,19 +260,20 @@ export default function App() {
       console.log('trainStatus (init):', status);
       setTrainStatus(status && status.status ? status : { status: 'idle' });
       if (status.status === 'running') setPolling(true);
+      else setPolling(false);
     }
     checkStatus();
     return () => { ignore = true; };
   }, []);
 
-  // Poll train status только если polling=true
+  // Poll train status только если polling=true и статус running
   useEffect(() => {
     if (!polling) return;
     const interval = setInterval(async () => {
       const status = await fetchTrainStatus();
       console.log('trainStatus (poll):', status);
       setTrainStatus(status && status.status ? status : { status: 'idle' });
-      if (status.status === 'done' || status.status === 'error' || status.status === 'not_found' || !status.status) {
+      if (status.status !== 'running') {
         setPolling(false);
       }
     }, 2000);
