@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
-from backend.app.column_mapping import REVERSE_COLUMN_MAPPING
+from column_mapping import REVERSE_COLUMN_MAPPING
 
 load_dotenv()
 
