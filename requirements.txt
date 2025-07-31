@@ -11,3 +11,5 @@ python-multipart
 celery[redis]
 redis
 flower
+psycopg2
+dotenv

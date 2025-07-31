@@ -1,0 +1,120 @@
+import os
+import pandas as pd
+import psycopg2
+from dotenv import load_dotenv
+from backend.app.column_mapping import REVERSE_COLUMN_MAPPING
+
+load_dotenv()
+
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = int(os.getenv('DB_PORT', 5432))
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_NAME = os.getenv('DB_NAME')
+
+DATA_TABLE = os.getenv('DATA_TABLE')
+COEFFS_WITH_INTERCEPT_TABLE = os.getenv('COEFFS_WITH_INTERCEPT_TABLE')
+COEFFS_NO_INTERCEPT_TABLE = os.getenv('COEFFS_NO_INTERCEPT_TABLE')
+ENSEMBLE_INFO_TABLE = os.getenv('ENSEMBLE_INFO_TABLE')
+BASEPLUS_TABULAR_ENSEMBLE_INFO_TABLE = os.getenv('BASEPLUS_TABULAR_ENSEMBLE_INFO_TABLE')
+BASEPLUS_FEATURE_IMPORTANCE_TABLE = os.getenv('BASEPLUS_FEATURE_IMPORTANCE_TABLE')
+
+SHEET_TO_TABLE = {
+    'data': DATA_TABLE,
+    'coeffs_with_intercept': COEFFS_WITH_INTERCEPT_TABLE,
+    'coeffs_no_intercept': COEFFS_NO_INTERCEPT_TABLE,
+    'TimeSeries_ensemble_models_info': ENSEMBLE_INFO_TABLE,
+}
+
+BASEPLUS_SHEET_TO_TABLE = {
+    'data': DATA_TABLE,
+    'coeffs_with_intercept': COEFFS_WITH_INTERCEPT_TABLE,
+    'coeffs_no_intercept': COEFFS_NO_INTERCEPT_TABLE,
+    'TimeSeries_ensemble_models_info': ENSEMBLE_INFO_TABLE,
+    'Tabular_ensemble_models_info': BASEPLUS_TABULAR_ENSEMBLE_INFO_TABLE,
+    'Tabular_feature_importance': BASEPLUS_FEATURE_IMPORTANCE_TABLE,
+}
+
+def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
+    """
+    Загружает все листы результата pipeline (BASE или BASE+) в соответствующие таблицы PostgreSQL через psycopg2.
+    """
+    xls = pd.read_excel(file_path, sheet_name=None)
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    try:
+        cur = conn.cursor()
+        for sheet, df in xls.items():
+            table = sheet_to_table.get(sheet)
+            if table is None:
+                continue
+            if df.empty:
+                continue
+            df.columns = [c.lower() for c in df.columns]
+            columns = ', '.join(df.columns)
+            values_template = ', '.join(['%s'] * len(df.columns))
+            insert_query = f'INSERT INTO {table} ({columns}) VALUES ({values_template})'
+            records = df.values.tolist()
+            for row in records:
+                cur.execute(insert_query, row)
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
+    """
+    Устанавливает значение pipeline в DATA_TABLE для заданной даты.
+    date_column: имя столбца с датой (например, 'date' или 'дата')
+    date_value: значение даты (строка в формате 'YYYY-MM-DD')
+    pipeline_value: 'BASE' или 'BASE+'
+    """
+    table = DATA_TABLE
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    try:
+        cur = conn.cursor()
+        query = f"""
+        UPDATE {table}
+        SET pipeline = %s
+        WHERE {date_column} = %s
+        """
+        cur.execute(query, (pipeline_value, date_value))
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+def export_pipeline_tables_to_excel(sheet_to_table: dict, output_path: str):
+    """
+    Экспортирует все таблицы из sheet_to_table обратно в Excel-файл с соответствующими листами.
+    """
+
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    try:
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            for sheet, table in sheet_to_table.items():
+                if table is None:
+                    continue
+                df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
+                # Преобразуем имена колонок обратно в Excel-вид, если есть маппинг
+                df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+                df.to_excel(writer, index=False, sheet_name=sheet)
+    finally:
+        conn.close()
