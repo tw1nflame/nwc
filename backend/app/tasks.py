@@ -28,7 +28,7 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
     MONTHES_TO_PREDICT = generate_monthly_period(CHOSEN_MONTH)
     df_all_items = load_and_transform_data(data_path, DATE_COLUMN, RATE_COLUMN)
     # Экспортируем все таблицы pipeline обратно в prev_path (Excel), независимо от pipeline
-    export_pipeline_tables_to_excel(BASEPLUS_SHEET_TO_TABLE, prev_path)
+    export_pipeline_tables_to_excel(SHEET_TO_TABLE, prev_path)
     try:
         task_id = self.request.id
         redis_client.set('current_train_task_id', task_id)
