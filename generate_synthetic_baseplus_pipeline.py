@@ -102,6 +102,8 @@ with pd.ExcelWriter('results/synthetic_base_pipeline_BASE.xlsx', engine='openpyx
                     'window': win,
                     'w_predict_naive': np.round(np.random.uniform(0.1, 1.0), 3),
                     'w_predict_TS_ML': np.round(np.random.uniform(0.1, 1.0), 3),
+                    'w_predict_ML_tabular': np.round(np.random.uniform(0.1, 1.0), 3),
+                    'w_predict_TABPFNMIX': np.round(np.random.uniform(0.1, 1.0), 3),
                     'bias': np.round(np.random.uniform(-10, 10), 2),
                     'Статья': article
                 })
@@ -119,6 +121,8 @@ with pd.ExcelWriter('results/synthetic_base_pipeline_BASE.xlsx', engine='openpyx
                     'window': win,
                     'w_predict_naive': np.round(np.random.uniform(0.1, 1.0), 3),
                     'w_predict_TS_ML': np.round(np.random.uniform(0.1, 1.0), 3),
+                    'w_predict_ML_tabular': np.round(np.random.uniform(0.1, 1.0), 3),
+                    'w_predict_TABPFNMIX': np.round(np.random.uniform(0.1, 1.0), 3),
                     'bias': 0.0,
                     'Статья': article
                 })
@@ -138,14 +142,55 @@ with pd.ExcelWriter('results/synthetic_base_pipeline_BASE.xlsx', engine='openpyx
             chosen = np.random.choice(ensemble_models, size=n_models, replace=False)
             weights = np.random.dirichlet(np.ones(n_models))
             ensemble_dict = {model.replace('predict_', ''): float(np.round(w, 3)) for model, w in zip(chosen, weights)}
+            # Factor: для примера, пусть для половины статей будет 'INDIVIDUAL', для остальных пусто
+            factor_value = 'INDIVIDUAL' if np.random.rand() < 0.5 else ''
             ensemble_rows.append({
                 'Дата': date.date(),
                 'Статья': article,
-                'Ансамбль': str(ensemble_dict)
+                'Ансамбль': str(ensemble_dict),
+                'Factor': factor_value
             })
     ensemble_df = pd.DataFrame(ensemble_rows)
     ensemble_df['Дата'] = ensemble_df['Дата'].apply(lambda x: x if isinstance(x, (pd.Timestamp,)) else pd.to_datetime(x)).apply(lambda x: x.date())
     ensemble_df.to_excel(writer, index=False, sheet_name='TimeSeries_ensemble_models_info')
+
+    # Генерируем лист Tabular_ensemble_models_info
+    tabular_ensemble_rows = []
+    for article in ARTICLES:
+        for date in DATE_RANGE:
+            n_models = np.random.randint(2, min(5, len(ensemble_models))+1)
+            chosen = np.random.choice(ensemble_models, size=n_models, replace=False)
+            weights = np.random.dirichlet(np.ones(n_models))
+            ensemble_dict = {model.replace('predict_', ''): float(np.round(w, 3)) for model, w in zip(chosen, weights)}
+            tabular_ensemble_rows.append({
+                'Дата': date.date(),
+                'Статья': article,
+                'Ансамбль': str(ensemble_dict)
+            })
+    tabular_ensemble_df = pd.DataFrame(tabular_ensemble_rows)
+    tabular_ensemble_df['Дата'] = tabular_ensemble_df['Дата'].apply(lambda x: x if isinstance(x, (pd.Timestamp,)) else pd.to_datetime(x)).apply(lambda x: x.date())
+    tabular_ensemble_df.to_excel(writer, index=False, sheet_name='Tabular_ensemble_models_info')
+    # Генерируем лист Tabular_feature_importance
+    tabular_feature_rows = []
+    for article in ARTICLES:
+        for date in DATE_RANGE:
+            n_features = np.random.randint(3, 7)
+            for i in range(n_features):
+                feature_name = f"feature_{i+1}_{article}"
+                tabular_feature_rows.append({
+                    'feature': feature_name,
+                    'importance': np.round(np.random.uniform(0, 1), 3),
+                    'stddev': np.round(np.random.uniform(0.01, 0.2), 3),
+                    'p_value': np.round(np.random.uniform(0.001, 0.2), 4),
+                    'n': np.random.randint(50, 200),
+                    'p99_high': np.round(np.random.uniform(0.5, 1.5), 3),
+                    'p99_low': np.round(np.random.uniform(-1.5, 0.5), 3),
+                    'Дата': date.date(),
+                    'Статья': article
+                })
+    tabular_feature_df = pd.DataFrame(tabular_feature_rows)
+    tabular_feature_df['Дата'] = tabular_feature_df['Дата'].apply(lambda x: x if isinstance(x, (pd.Timestamp,)) else pd.to_datetime(x)).apply(lambda x: x.date())
+    tabular_feature_df.to_excel(writer, index=False, sheet_name='Tabular_feature_importance')
 print('Файл сохранён: results/synthetic_base_pipeline_BASE.xlsx')
 
 # После генерации df проверим, что нет пропусков по датам

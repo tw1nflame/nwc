@@ -54,6 +54,18 @@ COLUMN_MAPPING = {
     'predict_stacking_RFR отклонение  %': 'predict_stacking_rfr_pct',
     'Статья': 'article',
     'pipeline': 'pipeline',
+    # Для листа Tabular_ensemble_models_info
+    'Ансамбль': 'ensemble',
+
+    # Для листа Tabular_feature_importance
+    'feature': 'feature',
+    'importance': 'importance',
+    'stddev': 'stddev',
+    'p_value': 'p_value',
+    'n': 'n',
+    'p99_high': 'p99_high',
+    'p99_low': 'p99_low',
+    # Дата и Статья уже есть
 }
 
 # Обратный маппинг: БД → Excel

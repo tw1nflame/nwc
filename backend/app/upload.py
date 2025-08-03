@@ -95,11 +95,12 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
     finally:
         conn.close()
 
-def export_pipeline_tables_to_excel(sheet_to_table: dict, output_path: str):
-    """
-    Экспортирует все таблицы из sheet_to_table обратно в Excel-файл с соответствующими листами.
-    """
+from io import BytesIO
 
+def export_pipeline_tables_to_excel(sheet_to_table: dict) -> BytesIO:
+    """
+    Экспортирует все таблицы из sheet_to_table в Excel-файл в памяти и возвращает BytesIO.
+    """
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -107,14 +108,16 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, output_path: str):
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
+    output = BytesIO()
     try:
-        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             for sheet, table in sheet_to_table.items():
                 if table is None:
                     continue
                 df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
-                # Преобразуем имена колонок обратно в Excel-вид, если есть маппинг
                 df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
                 df.to_excel(writer, index=False, sheet_name=sheet)
+        output.seek(0)
+        return output
     finally:
         conn.close()

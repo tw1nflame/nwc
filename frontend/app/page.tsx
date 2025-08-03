@@ -32,6 +32,7 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { parseYamlConfig } from "./utils/parseYaml"
 import { sendTrainRequest } from "./utils/api"
+import { downloadExcel } from "./utils/downloadExcel"
 import { fetchTrainStatus } from "./utils/trainStatus"
 import { stopTrainTask } from "./utils/stopTrain"
 
@@ -566,7 +567,7 @@ function PredictForm({
 
             <Separator className="bg-gray-200" />
 
-            {/* Submit Button */}
+            {/* Submit Button, Status, Stop, Download Excel */}
             <div className="space-y-6">
               <Button
                 type="submit"
@@ -600,6 +601,31 @@ function PredictForm({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Download Excel Button */}
+              <Button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const blob = await downloadExcel();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = "export_BASEPLUS.xlsx";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                  } catch (err) {
+                    alert("Не удалось скачать Excel файл");
+                  }
+                }}
+                variant="outline"
+                className="w-full bg-green-50 border-green-200 text-green-700 hover:bg-green-100 flex items-center justify-center text-lg font-semibold"
+              >
+                <Download className="w-5 h-5 mr-2" />
+                Скачать Excel
+              </Button>
             </div>
           </form>
         </CardContent>

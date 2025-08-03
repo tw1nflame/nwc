@@ -10,6 +10,8 @@ import json
 from tasks import train_task
 from celery_app import celery_app
 import redis
+from fastapi.responses import FileResponse, StreamingResponse
+from upload import export_pipeline_tables_to_excel, SHEET_TO_TABLE, BASEPLUS_SHEET_TO_TABLE
 
 app = FastAPI()
 
@@ -93,3 +95,17 @@ async def stop_train():
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+@app.get("/export_excel/")
+async def export_excel():
+    """
+    Экспортирует таблицы BASEPLUS pipeline в Excel и возвращает файл из памяти.
+    """
+    sheet_to_table = BASEPLUS_SHEET_TO_TABLE
+    excel_bytes = export_pipeline_tables_to_excel(sheet_to_table)
+    filename = f"export_BASEPLUS_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    return StreamingResponse(
+        excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
