@@ -34,41 +34,41 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
     try:
         task_id = self.request.id
         redis_client.set('current_train_task_id', task_id)
-        # if pipeline == "BASE+":
-        #     run_base_plus_pipeline(
-        #         df_all_items=df_all_items,
-        #         ITEMS_TO_PREDICT=ITEMS_TO_PREDICT,
-        #         config=config,
-        #         DATE_COLUMN=DATE_COLUMN,
-        #         RATE_COLUMN=RATE_COLUMN,
-        #         ITEM_ID=ITEM_ID,
-        #         FACTOR=FACTOR,
-        #         models_to_use=models_to_use,
-        #         TABPFNMIX_model=TABPFNMIX_model,
-        #         METRIC=METRIC,
-        #         CHOSEN_MONTH=CHOSEN_MONTH,
-        #         MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
-        #         result_file_name=result_file_name,
-        #         prev_predicts_file=prev_path
-        #     )
-        #     upload_pipeline_result_to_db(result_file_name, BASEPLUS_SHEET_TO_TABLE)
-        #     set_pipeline_column(DATE_COLUMN, date, 'BASE+')
-        # elif pipeline == "BASE":
-        #     run_base_pipeline(
-        #         df_all_items=df_all_items,
-        #         ITEMS_TO_PREDICT=ITEMS_TO_PREDICT,
-        #         config=config,
-        #         DATE_COLUMN=DATE_COLUMN,
-        #         RATE_COLUMN=RATE_COLUMN,
-        #         ITEM_ID=ITEM_ID,
-        #         FACTOR=FACTOR,
-        #         models_to_use=models_to_use,
-        #         METRIC=METRIC,
-        #         CHOSEN_MONTH=CHOSEN_MONTH,
-        #         MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
-        #         result_file_name=result_file_name,
-        #         prev_predicts_file=prev_path
-        #     )
+        if pipeline == "BASE+":
+            run_base_plus_pipeline(
+                df_all_items=df_all_items,
+                ITEMS_TO_PREDICT=ITEMS_TO_PREDICT,
+                config=config,
+                DATE_COLUMN=DATE_COLUMN,
+                RATE_COLUMN=RATE_COLUMN,
+                ITEM_ID=ITEM_ID,
+                FACTOR=FACTOR,
+                models_to_use=models_to_use,
+                TABPFNMIX_model=TABPFNMIX_model,
+                METRIC=METRIC,
+                CHOSEN_MONTH=CHOSEN_MONTH,
+                MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
+                result_file_name=result_file_name,
+                prev_predicts_file=prev_path
+            )
+            upload_pipeline_result_to_db(result_file_name, BASEPLUS_SHEET_TO_TABLE)
+            set_pipeline_column(DATE_COLUMN, date, 'BASE+')
+        elif pipeline == "BASE":
+            run_base_pipeline(
+                df_all_items=df_all_items,
+                ITEMS_TO_PREDICT=ITEMS_TO_PREDICT,
+                config=config,
+                DATE_COLUMN=DATE_COLUMN,
+                RATE_COLUMN=RATE_COLUMN,
+                ITEM_ID=ITEM_ID,
+                FACTOR=FACTOR,
+                models_to_use=models_to_use,
+                METRIC=METRIC,
+                CHOSEN_MONTH=CHOSEN_MONTH,
+                MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
+                result_file_name=result_file_name,
+                prev_predicts_file=prev_path
+            )
         upload_pipeline_result_to_db(result_file_name, BASEPLUS_SHEET_TO_TABLE)
         set_pipeline_column(DATE_COLUMN, date, 'BASE')
         return {"status": "done", "result_file": os.path.basename(result_file_name)}
