@@ -3,13 +3,13 @@ from utils.config import load_config
 from utils.datahandler import load_and_transform_data
 from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
 from utils.common import generate_monthly_period
-from upload import upload_pipeline_result_to_db, SHEET_TO_TABLE,  set_pipeline_column, export_pipeline_tables_to_excel
+from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel
 import os
 from datetime import datetime
 import redis
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
-RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../results'))
+RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results'))
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 redis_client = redis.Redis.from_url(REDIS_URL)
 

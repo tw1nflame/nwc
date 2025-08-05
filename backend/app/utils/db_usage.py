@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
 from column_mapping import REVERSE_COLUMN_MAPPING
+from utils.config import load_config
 
 load_dotenv()
 
@@ -95,7 +96,7 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
 
 from io import BytesIO
 
-def export_pipeline_tables_to_excel(sheet_to_table: dict) -> BytesIO:
+def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
     """
     Экспортирует все таблицы из sheet_to_table в Excel-файл в памяти и возвращает BytesIO.
     """
@@ -107,8 +108,42 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict) -> BytesIO:
         dbname=DB_NAME
     )
     output = BytesIO()
+    CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
+    config = load_config(CONFIG_PATH)
+    model_article = config.get('model_article', {})
     try:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            if make_final_prediction:
+                # Получаем данные из DATA_TABLE
+                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
+                # Применяем маппинг к колонкам
+                df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
+                # Формируем финальный DataFrame
+                final_rows = []
+                for _, row in df_data.iterrows():
+                    article = row.get('Статья')
+                    model_name = model_article.get(article)
+                    if not model_name:
+                        continue
+                    pred_col = f'predict_{model_name}'
+                    # Найти колонку с учетом маппинга
+                    mapped_pred_col = None
+                    for col in df_data.columns:
+                        if col.lower() == pred_col.lower():
+                            mapped_pred_col = col
+                            break
+                    if not mapped_pred_col:
+                        continue
+                    final_rows.append({
+                        'Дата': row.get('Дата'),
+                        'Статья': article,
+                        'Fact': row.get('Fact'),
+                        'Прогноз': row.get(mapped_pred_col),
+                        'Модель': model_name
+                    })
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Модель'])
+                df_final.to_excel(writer, index=False, sheet_name='final_prediction')
+            # Остальные листы
             for sheet, table in sheet_to_table.items():
                 if table is None:
                     continue

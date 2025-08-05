@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
-from column_mapping import COLUMN_MAPPING
+from utils.column_mapping import COLUMN_MAPPING
 import re
 
 load_dotenv()
