@@ -6,9 +6,7 @@ import os
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from celery.result import AsyncResult
-import json
 from tasks import train_task
-from celery_app import celery_app
 import redis
 from fastapi.responses import FileResponse, StreamingResponse, Response
 
