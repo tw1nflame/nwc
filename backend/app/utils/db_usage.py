@@ -29,6 +29,9 @@ SHEET_TO_TABLE = {
     'Tabular_feature_importance': BASEPLUS_FEATURE_IMPORTANCE_TABLE,
 }
 
+
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../config_refined.yaml'))
+
 def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
     """
     Загружает все листы результата pipeline (BASE или BASE+) в соответствующие таблицы PostgreSQL через psycopg2.
@@ -108,7 +111,6 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
         dbname=DB_NAME
     )
     output = BytesIO()
-    CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
     config = load_config(CONFIG_PATH)
     model_article = config.get('model_article', {})
     try:
