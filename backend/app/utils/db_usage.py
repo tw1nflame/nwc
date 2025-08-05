@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
-from utils.column_mapping import REVERSE_COLUMN_MAPPING
+from utils.column_mapping import REVERSE_COLUMN_MAPPING, COLUMN_MAPPING
 from utils.config import load_config
 
 load_dotenv()
@@ -32,9 +32,17 @@ SHEET_TO_TABLE = {
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../config_refined.yaml'))
 
-def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
+def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_value: str = None, date_column: str = None):
     """
     Загружает все листы результата pipeline (BASE или BASE+) в соответствующие таблицы PostgreSQL через psycopg2.
+    Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют, 
+    удаляет данные по указанной дате из соответствующих таблиц.
+    
+    Args:
+        file_path: путь к Excel файлу
+        sheet_to_table: маппинг листов к таблицам
+        date_value: дата для удаления данных из отсутствующих листов (формат 'YYYY-MM-DD')
+        date_column: имя столбца с датой в Excel (например, 'Дата'), будет преобразовано в имя столбца БД
     """
     xls = pd.read_excel(file_path, sheet_name=None)
     conn = psycopg2.connect(
@@ -46,8 +54,9 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
     )
     try:
         cur = conn.cursor()
-        # Очищаем все таблицы, даже если листа нет в Excel
-        for sheet, table in sheet_to_table.items():
+        # Очищаем только те таблицы, для которых есть соответствующие листы в Excel
+        for sheet, df in xls.items():
+            table = sheet_to_table.get(sheet)
             if table:
                 cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
         # Загружаем данные из Excel
@@ -64,6 +73,21 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
             records = df.values.tolist()
             for row in records:
                 cur.execute(insert_query, row)
+        
+        # Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют,
+        # удаляем данные по указанной дате из соответствующих таблиц
+        if date_value and date_column:
+            # Преобразуем имя столбца из Excel в имя столбца БД
+            db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+            tabular_sheets_to_check = ['Tabular_ensemble_models_info', 'Tabular_feature_importance']
+            for sheet_name in tabular_sheets_to_check:
+                if sheet_name not in xls:  # Лист отсутствует в Excel
+                    table = sheet_to_table.get(sheet_name)
+                    if table:
+                        # Удаляем данные по дате из таблицы, используя правильное имя столбца БД
+                        delete_query = f'DELETE FROM {table} WHERE {db_date_column} = %s'
+                        cur.execute(delete_query, (date_value,))
+        
         conn.commit()
         cur.close()
     finally:
@@ -72,11 +96,14 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
 def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
     """
     Устанавливает значение pipeline в DATA_TABLE для заданной даты.
-    date_column: имя столбца с датой (например, 'date' или 'дата')
+    date_column: имя столбца с датой в Excel (например, 'Дата'), будет преобразовано в имя столбца БД
     date_value: значение даты (строка в формате 'YYYY-MM-DD')
     pipeline_value: 'BASE' или 'BASE+'
     """
     table = DATA_TABLE
+    # Преобразуем имя столбца из Excel в имя столбца БД
+    db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+    
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -89,7 +116,7 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
         query = f"""
         UPDATE {table}
         SET pipeline = %s
-        WHERE {date_column} = %s
+        WHERE {db_date_column} = %s
         """
         cur.execute(query, (pipeline_value, date_value))
         conn.commit()
