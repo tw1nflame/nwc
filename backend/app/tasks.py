@@ -3,7 +3,7 @@ from utils.config import load_config
 from utils.datahandler import load_and_transform_data
 from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
 from utils.common import generate_monthly_period
-from upload import upload_pipeline_result_to_db, SHEET_TO_TABLE, BASEPLUS_SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel
+from upload import upload_pipeline_result_to_db, SHEET_TO_TABLE,  set_pipeline_column, export_pipeline_tables_to_excel
 import os
 from datetime import datetime
 import redis
@@ -28,7 +28,7 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
     MONTHES_TO_PREDICT = generate_monthly_period(CHOSEN_MONTH)
     df_all_items = load_and_transform_data(data_path, DATE_COLUMN, RATE_COLUMN)
     # Экспортируем все таблицы pipeline обратно в prev_path (Excel), независимо от pipeline
-    output = export_pipeline_tables_to_excel(BASEPLUS_SHEET_TO_TABLE)
+    output = export_pipeline_tables_to_excel(SHEET_TO_TABLE)
     with open(prev_path, "wb") as f:
         f.write(output.getvalue())
     try:
@@ -51,7 +51,7 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
                 result_file_name=result_file_name,
                 prev_predicts_file=prev_path
             )
-            upload_pipeline_result_to_db(result_file_name, BASEPLUS_SHEET_TO_TABLE)
+            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE)
             set_pipeline_column(DATE_COLUMN, date, 'BASE+')
         elif pipeline == "BASE":
             run_base_pipeline(
@@ -69,8 +69,8 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
                 result_file_name=result_file_name,
                 prev_predicts_file=prev_path
             )
-        upload_pipeline_result_to_db(result_file_name, BASEPLUS_SHEET_TO_TABLE)
-        set_pipeline_column(DATE_COLUMN, date, 'BASE')
+            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE)
+            set_pipeline_column(DATE_COLUMN, date, 'BASE')
         return {"status": "done", "result_file": os.path.basename(result_file_name)}
     except Exception as e:
         return {"status": "error", "error": str(e)}

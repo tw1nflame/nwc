@@ -82,7 +82,7 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
                   className="w-full justify-start"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Анализ</span>
+                  <span>Анализ и выгрузка</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

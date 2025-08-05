@@ -24,13 +24,6 @@ SHEET_TO_TABLE = {
     'coeffs_with_intercept': COEFFS_WITH_INTERCEPT_TABLE,
     'coeffs_no_intercept': COEFFS_NO_INTERCEPT_TABLE,
     'TimeSeries_ensemble_models_info': ENSEMBLE_INFO_TABLE,
-}
-
-BASEPLUS_SHEET_TO_TABLE = {
-    'data': DATA_TABLE,
-    'coeffs_with_intercept': COEFFS_WITH_INTERCEPT_TABLE,
-    'coeffs_no_intercept': COEFFS_NO_INTERCEPT_TABLE,
-    'TimeSeries_ensemble_models_info': ENSEMBLE_INFO_TABLE,
     'Tabular_ensemble_models_info': BASEPLUS_TABULAR_ENSEMBLE_INFO_TABLE,
     'Tabular_feature_importance': BASEPLUS_FEATURE_IMPORTANCE_TABLE,
 }
@@ -49,6 +42,11 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict):
     )
     try:
         cur = conn.cursor()
+        # Очищаем все таблицы, даже если листа нет в Excel
+        for sheet, table in sheet_to_table.items():
+            if table:
+                cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
+        # Загружаем данные из Excel
         for sheet, df in xls.items():
             table = sheet_to_table.get(sheet)
             if table is None:

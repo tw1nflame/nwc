@@ -1,4 +1,5 @@
 import type React from "react"
+import { ExcelProvider } from "../context/ExcelContext"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
@@ -26,7 +27,11 @@ html {
 }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        <ExcelProvider>
+          {children}
+        </ExcelProvider>
+      </body>
     </html>
   )
 }
