@@ -172,8 +172,8 @@ export function AnalysisPage() {
         // Получаем модели через utils
         const filteredModels = await fetchExcelAndParseModels(arrayBuffer);
         setModels(filteredModels);
-        // fetch articles from config_refined.yaml
-        const yamlRes = await fetch("/config_refined.yaml");
+        // fetch articles from config
+        const yamlRes = await fetch(backendUrl.replace(/\/$/, '') + "/config");
         const yamlText = await yamlRes.text();
         const config = parseYamlConfig(yamlText);
         const articleList = config && config["Статья"] ? Object.keys(config["Статья"]) : [];

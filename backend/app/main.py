@@ -10,10 +10,24 @@ import json
 from tasks import train_task
 from celery_app import celery_app
 import redis
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
+
 from upload import export_pipeline_tables_to_excel, SHEET_TO_TABLE, BASEPLUS_SHEET_TO_TABLE
 
 app = FastAPI()
+
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
+
+@app.get("/config")
+async def get_config():
+    """
+    Возвращает содержимое config_refined.yaml из корня проекта.
+    """
+    if not os.path.exists(CONFIG_PATH):
+        raise HTTPException(status_code=404, detail="Config file not found")
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    return Response(content, media_type="text/yaml")
 
 app.add_middleware(
     CORSMiddleware,

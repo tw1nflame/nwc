@@ -495,7 +495,7 @@ export function TrainingPage() {
   const [polling, setPolling] = useState(false)
 
   useEffect(() => {
-    fetch("/config_refined.yaml")
+    fetch((process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000") + "/config")
       .then((res) => res.text())
       .then((text) => setConfig(parseYamlConfig(text)))
   }, [])
