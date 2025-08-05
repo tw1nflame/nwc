@@ -11,6 +11,11 @@ export type ExcelContextType = {
   setArticles: (articles: string[]) => void
   parsedJson: any[]
   setParsedJson: (json: any[]) => void
+  // Добавляем сохранение состояния анализа
+  selectedArticle: string
+  setSelectedArticle: (article: string) => void
+  selectedModels: string[]
+  setSelectedModels: (models: string[]) => void
 }
 
 const ExcelContext = createContext<ExcelContextType | undefined>(undefined)
@@ -26,9 +31,19 @@ export function ExcelProvider({ children }: { children: React.ReactNode }) {
   const [models, setModels] = useState<string[]>([])
   const [articles, setArticles] = useState<string[]>([])
   const [parsedJson, setParsedJson] = useState<any[]>([])
+  // Добавляем состояние для анализа
+  const [selectedArticle, setSelectedArticle] = useState<string>("")
+  const [selectedModels, setSelectedModels] = useState<string[]>([])
 
   return (
-    <ExcelContext.Provider value={{ excelBuffer, setExcelBuffer, models, setModels, articles, setArticles, parsedJson, setParsedJson }}>
+    <ExcelContext.Provider value={{ 
+      excelBuffer, setExcelBuffer, 
+      models, setModels, 
+      articles, setArticles, 
+      parsedJson, setParsedJson,
+      selectedArticle, setSelectedArticle,
+      selectedModels, setSelectedModels
+    }}>
       {children}
     </ExcelContext.Provider>
   )

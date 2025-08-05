@@ -11,13 +11,16 @@ export async function fetchExcelAndParseModels(arrayBuffer) {
     arrayBuffer = await blob.arrayBuffer();
   }
   const workbook = XLSX.read(arrayBuffer, { type: "array" });
-  // Find first sheet with predict_ columns
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
+  // Всегда парсим лист 'data', если он есть
+  const sheet = workbook.Sheets["data"] || workbook.Sheets[workbook.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
   const headers = json[0] || [];
   const models = headers
     .filter((h) => typeof h === "string" && h.startsWith("predict_"))
-    .map((h) => h.replace("predict_", ""));
+    .map((h) => h.replace("predict_", ""))
+    .filter((m) => {
+      const name = m.trim().toLowerCase();
+      return !name.endsWith("разница") && !/отклонение\s*%$/.test(name);
+    });
   return models;
 }
