@@ -17,6 +17,7 @@ import { parseYamlConfig } from "./utils/parseYaml"
 import { fetchExcelDataForChart } from "./utils/fetchExcelDataForChart"
 import * as XLSX from "xlsx"
 import { useEffect } from "react"
+import { useConfig } from "../context/ConfigContext"
 
 const chartConfig = {
   forecast: {
@@ -134,6 +135,7 @@ function AbsoluteDiffChart({ data }: { data: any[] }) {
 }
 
 export function AnalysisPage() {
+  const { config, loading: configLoading } = useConfig();
   const [chartData, setChartData] = useState<any[]>([])
   const [chartLoading, setChartLoading] = useState(false)
   const [selectedArticle, setSelectedArticle] = useState<string>("")
@@ -172,10 +174,7 @@ export function AnalysisPage() {
         // Получаем модели через utils
         const filteredModels = await fetchExcelAndParseModels(arrayBuffer);
         setModels(filteredModels);
-        // fetch articles from config
-        const yamlRes = await fetch(backendUrl.replace(/\/$/, '') + "/config");
-        const yamlText = await yamlRes.text();
-        const config = parseYamlConfig(yamlText);
+        // get articles from config context
         const articleList = config && config["Статья"] ? Object.keys(config["Статья"]) : [];
         setArticles(articleList);
         setSelectedArticle(articleList[0] || "");
@@ -192,8 +191,8 @@ export function AnalysisPage() {
       }
       setLoading(false);
     }
-    fetchData();
-  }, []);
+    if (!configLoading) fetchData();
+  }, [configLoading, config]);
 
   useEffect(() => {
     if (!selectedArticle || !selectedModel || !parsedJson || !parsedJson.length) return;

@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 import { parseYamlConfig } from "./utils/parseYaml"
+import { useConfig } from "../context/ConfigContext"
 import { sendTrainRequest } from "./utils/api"
 import { fetchTrainStatus } from "./utils/trainStatus"
 import { stopTrainTask } from "./utils/stopTrain"
@@ -490,14 +491,13 @@ function PredictForm({
 }
 
 export function TrainingPage() {
-  const [config, setConfig] = useState(null)
+  const { config, loading: configLoading } = useConfig();
   const [trainStatus, setTrainStatus] = useState({ status: "idle" })
   const [polling, setPolling] = useState(false)
 
   useEffect(() => {
-    fetch((process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000") + "/config")
-      .then((res) => res.text())
-      .then((text) => setConfig(parseYamlConfig(text)))
+    // config is now provided by context
+    // no need to fetch config here
   }, [])
 
   useEffect(() => {

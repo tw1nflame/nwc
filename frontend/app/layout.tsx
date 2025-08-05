@@ -1,5 +1,6 @@
 import type React from "react"
 import { ExcelProvider } from "../context/ExcelContext"
+import { ConfigProvider } from "../context/ConfigContext"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
@@ -28,9 +29,11 @@ html {
         `}</style>
       </head>
       <body>
-        <ExcelProvider>
-          {children}
-        </ExcelProvider>
+        <ConfigProvider>
+          <ExcelProvider>
+            {children}
+          </ExcelProvider>
+        </ConfigProvider>
       </body>
     </html>
   )
