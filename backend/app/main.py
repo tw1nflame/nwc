@@ -78,8 +78,7 @@ async def train_status():
         return {"status": "running", **progress}
     elif res.state == 'SUCCESS':
         result = res.result
-        # Очищаем прогресс после завершения
-        training_status_manager.clear_training_progress()
+        # НЕ очищаем task_id, чтобы статус "done" сохранялся
         return {"status": "done", **(result if isinstance(result, dict) else {})}
     elif res.state == 'FAILURE':
         # Очищаем прогресс после ошибки
@@ -109,6 +108,14 @@ async def stop_train():
     training_status_manager.clear_training_progress()
     
     return {"status": "revoked", "task_id": task_id}
+
+@app.post("/clear_status/")
+async def clear_status():
+    """
+    Очистка статуса завершенного обучения (кнопка ОК на фронтенде)
+    """
+    training_status_manager.clear_completed_status()
+    return {"status": "cleared"}
 
 @app.get("/")
 async def root():

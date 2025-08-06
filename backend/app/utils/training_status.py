@@ -37,6 +37,9 @@ class TrainingStatusManager:
             task_id: ID задачи Celery
         """
         try:
+            # Полная очистка предыдущего статуса при новом запуске
+            self.clear_training_progress()
+            
             self.redis_client.set(self.KEYS['total_articles'], total_articles)
             self.redis_client.set(self.KEYS['processed_articles'], 0)
             self.redis_client.set(self.KEYS['current_article'], '')
@@ -143,6 +146,16 @@ class TrainingStatusManager:
             True если обучение активно, False иначе
         """
         return self.get_current_task_id() is not None
+
+    def clear_completed_status(self) -> None:
+        """
+        Очистка статуса завершенного обучения (по кнопке ОК)
+        """
+        try:
+            self.redis_client.delete(self.KEYS['current_task_id'])
+            # Оставляем данные прогресса для возможного отображения
+        except Exception as e:
+            print(f"Error clearing completed status: {e}")
 
 
 # Singleton instance для использования в приложении

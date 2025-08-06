@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Clock,
   Loader2,
+  TrendingUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -31,6 +32,7 @@ import { useConfig } from "../context/ConfigContext"
 import { sendTrainRequest } from "./utils/api"
 import { fetchTrainStatus } from "./utils/trainStatus"
 import { stopTrainTask } from "./utils/stopTrain"
+import { clearTrainStatus } from "./utils/clearStatus"
 
 function MonthYearPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -219,7 +221,7 @@ function FileInput({
   )
 }
 
-function StatusIndicator({ trainStatus }: { trainStatus: any }) {
+function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onClearStatus?: () => void }) {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "running":
@@ -235,7 +237,7 @@ function StatusIndicator({ trainStatus }: { trainStatus: any }) {
         return {
           color: "green",
           icon: CheckCircle,
-          text: "Обучение завершено!",
+          text: "Прогноз готов. Данные сохранены в БД и готовы к выгрузке!",
           bgClass: "bg-emerald-50 border-emerald-200 text-emerald-800",
           iconClass: "text-emerald-600",
         }
@@ -269,6 +271,11 @@ function StatusIndicator({ trainStatus }: { trainStatus: any }) {
   const config = getStatusConfig(trainStatus?.status || "idle")
   const Icon = config.icon
 
+  const handleClearStatus = async () => {
+    await clearTrainStatus()
+    onClearStatus && onClearStatus()
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -279,10 +286,14 @@ function StatusIndicator({ trainStatus }: { trainStatus: any }) {
       <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass} font-medium`}>
         <Icon className={`w-5 h-5 ${config.iconClass}`} />
         <span>{config.text}</span>
-        {trainStatus?.result_file && trainStatus?.status === "done" && (
-          <Badge variant="outline" className="ml-auto bg-emerald-100 text-emerald-800 border-emerald-300">
-            {trainStatus.result_file}
-          </Badge>
+        {trainStatus?.status === "done" && (
+          <Button
+            size="sm"
+            onClick={handleClearStatus}
+            className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4"
+          >
+            ОК
+          </Button>
         )}
       </div>
 
@@ -352,11 +363,13 @@ function PredictForm({
   onSubmit,
   trainStatus,
   onStop,
+  onClearStatus,
 }: {
   config: any
   onSubmit?: (data: any) => void
   trainStatus: any
   onStop?: () => void
+  onClearStatus?: () => void
 }) {
   const [pipeline, setPipeline] = useState("BASE")
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -521,12 +534,12 @@ function PredictForm({
         <CardContent className="p-6">
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              <h3 className="text-lg font-semibold text-gray-800">Статус обучения</h3>
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-800">Статус прогноза</h3>
             </div>
 
             {/* Status Display */}
-            <StatusIndicator trainStatus={trainStatus} />
+            <StatusIndicator trainStatus={trainStatus} onClearStatus={onClearStatus} />
 
             {/* Stop Button */}
             <AnimatePresence>
@@ -606,6 +619,11 @@ export function TrainingPage() {
     setPolling(false)
   }
 
+  const handleClearStatus = () => {
+    setTrainStatus({ status: "idle" })
+    setPolling(false)
+  }
+
   return (
     <main className="flex-1 p-8">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
@@ -613,7 +631,7 @@ export function TrainingPage() {
         <p className="text-gray-600 text-lg">Настройка и запуск процесса обучения модели прогнозирования</p>
       </motion.div>
 
-      {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} onStop={handleStop} />}
+      {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} onStop={handleStop} onClearStatus={handleClearStatus} />}
     </main>
   )
 }

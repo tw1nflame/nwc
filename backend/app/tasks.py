@@ -78,8 +78,8 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
             set_pipeline_column(DATE_COLUMN, date, 'BASE')
         
-        # Очищаем прогресс при успешном завершении
-        training_status_manager.clear_training_progress()
+        # НЕ очищаем прогресс при успешном завершении - оставляем task_id
+        # для отображения статуса "done" до нажатия кнопки ОК
         
         return {"status": "done", "result_file": os.path.basename(result_file_name)}
     except Exception as e:
