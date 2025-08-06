@@ -486,52 +486,44 @@ export function AnalysisPage() {
                         <thead>
                           <tr className="border-b border-gray-200">
                             <th className="text-left py-3 px-4 font-semibold text-gray-900">Модель</th>
-                            <th className="text-center py-3 px-4 font-semibold text-blue-700">Средняя ошибка</th>
-                            <th className="text-center py-3 px-4 font-semibold text-green-700">Макс. ошибка</th>
-                            <th className="text-center py-3 px-4 font-semibold text-purple-700">Точность</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Средняя ошибка</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Макс. ошибка</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Точность</th>
                             <th className="text-center py-3 px-4 font-semibold text-gray-700">Мин. ошибка</th>
                           </tr>
                         </thead>
                         <tbody>
                           {chartData.map(({ model, data }) => (
-                            <tr key={model} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <tr key={model} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${mainModelLower && model.toLowerCase() === mainModelLower ? 'bg-blue-50' : ''}`}>
                               <td className="py-4 px-4">
                                 <div className="flex items-center">
-                                  <span className="font-medium text-gray-900">{model}</span>
+                                  <span className={`font-medium ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-900' : 'text-gray-900'}`}>{model}</span>
                                   {mainModelLower && model.toLowerCase() === mainModelLower && (
                                     <span className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
-                                      главная
+                                      целевая
                                     </span>
                                   )}
                                 </div>
                               </td>
                               <td className="py-4 px-4 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-8 bg-blue-50 rounded-lg border border-blue-200">
-                                  <span className="text-sm font-bold text-blue-700">
-                                    {data.length ? `${(data.reduce((acc: any, d: any) => acc + (d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
-                                  </span>
-                                </div>
+                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                  {data.length ? `${(data.reduce((acc: any, d: any) => acc + (d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
+                                </span>
                               </td>
                               <td className="py-4 px-4 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-8 bg-green-50 rounded-lg border border-green-200">
-                                  <span className="text-sm font-bold text-green-700">
-                                    {data.length ? `${Math.max(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
-                                  </span>
-                                </div>
+                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                  {data.length ? `${Math.max(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
+                                </span>
                               </td>
                               <td className="py-4 px-4 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-8 bg-purple-50 rounded-lg border border-purple-200">
-                                  <span className="text-sm font-bold text-purple-700">
-                                    {data.length ? `${(100 - data.reduce((acc: any, d: any) => acc + Math.abs(d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
-                                  </span>
-                                </div>
+                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                  {data.length ? `${(100 - data.reduce((acc: any, d: any) => acc + Math.abs(d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
+                                </span>
                               </td>
                               <td className="py-4 px-4 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-8 bg-gray-50 rounded-lg border border-gray-200">
-                                  <span className="text-sm font-bold text-gray-700">
-                                    {data.length ? `${Math.min(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
-                                  </span>
-                                </div>
+                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                  {data.length ? `${Math.min(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
+                                </span>
                               </td>
                             </tr>
                           ))}

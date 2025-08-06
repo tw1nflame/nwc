@@ -273,14 +273,75 @@ function StatusIndicator({ trainStatus }: { trainStatus: any }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass} font-medium`}
+      className="space-y-4"
     >
-      <Icon className={`w-5 h-5 ${config.iconClass}`} />
-      <span>{config.text}</span>
-      {trainStatus?.result_file && trainStatus?.status === "done" && (
-        <Badge variant="outline" className="ml-auto bg-emerald-100 text-emerald-800 border-emerald-300">
-          {trainStatus.result_file}
-        </Badge>
+      {/* Основной статус */}
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass} font-medium`}>
+        <Icon className={`w-5 h-5 ${config.iconClass}`} />
+        <span>{config.text}</span>
+        {trainStatus?.result_file && trainStatus?.status === "done" && (
+          <Badge variant="outline" className="ml-auto bg-emerald-100 text-emerald-800 border-emerald-300">
+            {trainStatus.result_file}
+          </Badge>
+        )}
+      </div>
+
+      {/* Детальный прогресс (показываем только во время обучения) */}
+      {(trainStatus?.status === "running" || trainStatus?.status === "pending") && (
+        <DetailedProgressIndicator trainStatus={trainStatus} />
+      )}
+    </motion.div>
+  )
+}
+
+function DetailedProgressIndicator({ trainStatus }: { trainStatus: any }) {
+  const {
+    current_article = "",
+    total_articles = 0,
+    processed_articles = 0,
+    percentage = 0
+  } = trainStatus || {}
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      className="bg-white border border-gray-200 rounded-lg p-4 space-y-4"
+    >
+      {/* Прогресс-бар */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium text-gray-700">Общий прогресс</span>
+          <span className="text-blue-600 font-semibold">{percentage.toFixed(1)}%</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <motion.div
+            className="bg-blue-600 h-2.5 rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${percentage}%` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>Обработано: {processed_articles} из {total_articles}</span>
+        </div>
+      </div>
+
+      {/* Текущая статья */}
+      {current_article && (
+        <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex-shrink-0">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            </div>
+          </div>
+          <div className="flex-grow min-w-0">
+            <p className="text-sm font-medium text-blue-900">Обрабатывается статья:</p>
+            <p className="text-sm text-blue-700 truncate" title={current_article}>
+              {current_article}
+            </p>
+          </div>
+        </div>
       )}
     </motion.div>
   )
@@ -290,16 +351,17 @@ function PredictForm({
   config,
   onSubmit,
   trainStatus,
+  onStop,
 }: {
   config: any
   onSubmit?: (data: any) => void
   trainStatus: any
+  onStop?: () => void
 }) {
   const [pipeline, setPipeline] = useState("BASE")
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [date, setDate] = useState("2025-01-01")
   const [dataFile, setDataFile] = useState<File | null>(null)
-  const [prevResultsFile, setPrevResultsFile] = useState<File | null>(null)
 
   useEffect(() => {
     if (config && config["Статья"]) {
@@ -322,12 +384,13 @@ function PredictForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!dataFile || !prevResultsFile) return
-    onSubmit && onSubmit({ pipeline, selectedItems, date, dataFile, prevResultsFile })
+    if (!dataFile) return
+    onSubmit && onSubmit({ pipeline, selectedItems, date, dataFile })
   }
 
   const handleStop = async () => {
     await stopTrainTask()
+    onStop && onStop()
   }
 
   return (
@@ -424,8 +487,8 @@ function PredictForm({
 
             <Separator className="bg-gray-200" />
 
-            {/* File Uploads */}
-            <div className="grid md:grid-cols-2 gap-8">
+            {/* File Upload */}
+            <div className="max-w-md">
               <FileInput
                 label="Файл с данными (ЧОК исторические)"
                 accept=".xlsm,.xlsx"
@@ -433,15 +496,6 @@ function PredictForm({
                 onFileChange={setDataFile}
                 onRemove={() => setDataFile(null)}
                 icon={Database}
-              />
-
-              <FileInput
-                label="Файл с предыдущими прогнозами"
-                accept=".xlsm,.xlsx"
-                file={prevResultsFile}
-                onFileChange={setPrevResultsFile}
-                onRemove={() => setPrevResultsFile(null)}
-                icon={FileText}
               />
             </div>
 
@@ -452,38 +506,50 @@ function PredictForm({
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-[26px] text-lg font-semibold shadow-lg"
-                disabled={!dataFile || !prevResultsFile || trainStatus?.status === "running"}
+                disabled={!dataFile || trainStatus?.status === "running"}
               >
                 <Play className="w-5 h-5 mr-2" />
                 Запустить расчёт
               </Button>
-
-              {/* Status Display */}
-              <StatusIndicator trainStatus={trainStatus} />
-
-              {/* Stop Button */}
-              <AnimatePresence>
-                {trainStatus?.status === "running" && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <Button
-                      type="button"
-                      onClick={handleStop}
-                      variant="destructive"
-                      className="w-full bg-red-600 hover:bg-red-700 py-[26px] flex items-center justify-center text-lg font-semibold"
-                    >
-                      <Square className="w-4 h-4 mr-2" />
-                      Остановить обучение
-                    </Button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Отдельная карточка для статуса и управления */}
+      <Card className="shadow-xl border-gray-200 bg-white mt-6">
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+              <h3 className="text-lg font-semibold text-gray-800">Статус обучения</h3>
+            </div>
+
+            {/* Status Display */}
+            <StatusIndicator trainStatus={trainStatus} />
+
+            {/* Stop Button */}
+            <AnimatePresence>
+              {trainStatus?.status === "running" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Button
+                    type="button"
+                    onClick={handleStop}
+                    variant="destructive"
+                    className="w-full bg-red-600 hover:bg-red-700 py-[26px] flex items-center justify-center text-lg font-semibold"
+                  >
+                    <Square className="w-4 h-4 mr-2" />
+                    Остановить обучение
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </div>
         </CardContent>
       </Card>
     </motion.div>
@@ -492,7 +558,7 @@ function PredictForm({
 
 export function TrainingPage() {
   const { config, loading: configLoading } = useConfig();
-  const [trainStatus, setTrainStatus] = useState({ status: "idle" })
+  const [trainStatus, setTrainStatus] = useState<any>({ status: "idle" })
   const [polling, setPolling] = useState(false)
 
   useEffect(() => {
@@ -504,6 +570,7 @@ export function TrainingPage() {
     let ignore = false
     async function checkStatus() {
       const status = await fetchTrainStatus()
+      
       if (!ignore) {
         setTrainStatus(status && status.status ? status : { status: "idle" })
         if (status.status === "running") setPolling(true)
@@ -520,6 +587,7 @@ export function TrainingPage() {
     if (!polling) return
     const interval = setInterval(async () => {
       const status = await fetchTrainStatus()
+      
       setTrainStatus(status && status.status ? status : { status: "idle" })
       if (status.status !== "running") {
         setPolling(false)
@@ -528,11 +596,14 @@ export function TrainingPage() {
     return () => clearInterval(interval)
   }, [polling])
 
-  const handleTrainSubmit = async ({ pipeline, selectedItems, date, dataFile, prevResultsFile }: any) => {
-    setTrainStatus({ status: "running" })
+  const handleTrainSubmit = async ({ pipeline, selectedItems, date, dataFile }: any) => {
+    await sendTrainRequest({ pipeline, selectedItems, date, dataFile })
     setPolling(true)
-    await sendTrainRequest({ pipeline, selectedItems, date, dataFile, prevResultsFile })
-    // Можно обработать resp.task_id если нужно
+  }
+
+  const handleStop = () => {
+    setTrainStatus({ status: "revoked" })
+    setPolling(false)
   }
 
   return (
@@ -542,7 +613,7 @@ export function TrainingPage() {
         <p className="text-gray-600 text-lg">Настройка и запуск процесса обучения модели прогнозирования</p>
       </motion.div>
 
-      {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} />}
+      {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} onStop={handleStop} />}
     </main>
   )
 }

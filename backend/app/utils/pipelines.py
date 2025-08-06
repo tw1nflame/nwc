@@ -47,7 +47,8 @@ def run_base_plus_pipeline(
         CHOSEN_MONTH,
         MONTHES_TO_PREDICT,
         result_file_name,
-        prev_predicts_file
+        prev_predicts_file,
+        status_manager=None
     ):
 
     result_dfs = []
@@ -59,6 +60,11 @@ def run_base_plus_pipeline(
 
     for target, features in ITEMS_TO_PREDICT.items():    # <!> Должны быть переданы статьи из интерфейса. st.session_state['items_to_predict']
         TARGET_COLUMN = target
+        
+        # Обновляем статус текущей статьи
+        if status_manager:
+            status_manager.update_current_article(TARGET_COLUMN)
+        
         FEATURES = features
         PREDICT_TARGET_IN_USD = TARGET_COLUMN in config['Статьи для предикта в USD']
         FEATURES_TO_USD = TARGET_COLUMN in config['Фичи в Статьях для USD']
@@ -355,6 +361,10 @@ def run_base_plus_pipeline(
         ensemble_info_dfs.append(DF_ENSMBLE_INFO)
         tabular_ensemble_info_dfs.append(DF_TABULAR_ENSEMBL_INFO)
         feature_importance_dfs.append(DF_FEATURE_IMPORTANCE.astype(prev_feature_imp.dtypes)) # bug fix for GH55067
+        
+        # Обновляем счетчик обработанных статей
+        if status_manager:
+            status_manager.increment_processed_articles()
 
 
     # concats
@@ -391,7 +401,8 @@ def run_base_pipeline(
         CHOSEN_MONTH,
         MONTHES_TO_PREDICT,
         result_file_name,
-        prev_predicts_file
+        prev_predicts_file,
+        status_manager=None
     ):
 
     result_dfs = []
@@ -401,6 +412,11 @@ def run_base_pipeline(
 
     for target, features in ITEMS_TO_PREDICT.items():    # <!> Должны быть переданы статьи из интерфейса. st.session_state['items_to_predict']
         TARGET_COLUMN = target
+        
+        # Обновляем статус текущей статьи
+        if status_manager:
+            status_manager.update_current_article(TARGET_COLUMN)
+        
         FEATURES = features
         PREDICT_TARGET_IN_USD = TARGET_COLUMN in config['Статьи для предикта в USD']
         FEATURES_TO_USD = TARGET_COLUMN in config['Фичи в Статьях для USD']
@@ -695,6 +711,10 @@ def run_base_pipeline(
         linreg_w_intercept_weights_dfs.append(LINREG_WITH_INTERCEPT_WEIGHTS_DF)
         linreg_no_intercept_weights_dfs.append(LINREG_NO_INTERCEPT_WEIGHTS_DF)
         ensemble_info_dfs.append(DF_ENSMBLE_INFO)
+        
+        # Обновляем счетчик обработанных статей
+        if status_manager:
+            status_manager.increment_processed_articles()
 
 
     # concats

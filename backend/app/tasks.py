@@ -4,17 +4,16 @@ from utils.datahandler import load_and_transform_data
 from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
 from utils.common import generate_monthly_period
 from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel
+from utils.training_status import training_status_manager
 import os
 from datetime import datetime
-import redis
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
 RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results'))
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-redis_client = redis.Redis.from_url(REDIS_URL)
+TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'training_files'))
 
 @celery_app.task(bind=True, track_started=True)
-def train_task(self, pipeline, items_list, date, data_path, prev_path, result_file_name):
+def train_task(self, pipeline, items_list, date, data_path, result_file_name):
     config = load_config(CONFIG_PATH)
     DATE_COLUMN = config['DATE_COLUMN']
     RATE_COLUMN = config['RATE_COLUMN']
@@ -27,13 +26,18 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
     CHOSEN_MONTH = datetime.strptime(date, "%Y-%m-%d")
     MONTHES_TO_PREDICT = generate_monthly_period(CHOSEN_MONTH)
     df_all_items = load_and_transform_data(data_path, DATE_COLUMN, RATE_COLUMN)
-    # Экспортируем все таблицы pipeline обратно в prev_path (Excel), независимо от pipeline
+    
+    # Инициализация статуса обучения
+    total_articles = len(ITEMS_TO_PREDICT)
+    task_id = self.request.id
+    training_status_manager.initialize_training(total_articles, task_id)
+    
+    # Создаем файл с данными из БД для использования в pipeline
+    prev_path = os.path.join(TRAINING_FILES_DIR, f"prev_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     output = export_pipeline_tables_to_excel(SHEET_TO_TABLE)
     with open(prev_path, "wb") as f:
         f.write(output.getvalue())
     try:
-        task_id = self.request.id
-        redis_client.set('current_train_task_id', task_id)
         if pipeline == "BASE+":
             run_base_plus_pipeline(
                 df_all_items=df_all_items,
@@ -49,7 +53,8 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
                 CHOSEN_MONTH=CHOSEN_MONTH,
                 MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
                 result_file_name=result_file_name,
-                prev_predicts_file=prev_path
+                prev_predicts_file=prev_path,
+                status_manager=training_status_manager
             )
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
             set_pipeline_column(DATE_COLUMN, date, 'BASE+')
@@ -67,10 +72,23 @@ def train_task(self, pipeline, items_list, date, data_path, prev_path, result_fi
                 CHOSEN_MONTH=CHOSEN_MONTH,
                 MONTHES_TO_PREDICT=MONTHES_TO_PREDICT,
                 result_file_name=result_file_name,
-                prev_predicts_file=prev_path
+                prev_predicts_file=prev_path,
+                status_manager=training_status_manager
             )
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
             set_pipeline_column(DATE_COLUMN, date, 'BASE')
+        
+        # Очищаем прогресс при успешном завершении
+        training_status_manager.clear_training_progress()
+        
         return {"status": "done", "result_file": os.path.basename(result_file_name)}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        # Очищаем прогресс при ошибке или отмене
+        training_status_manager.clear_training_progress()
+        
+        # Проверяем, была ли задача отменена
+        from celery.exceptions import Revoked
+        if isinstance(e, Revoked):
+            return {"status": "revoked", "error": "Task was revoked"}
+        else:
+            return {"status": "error", "error": str(e)}

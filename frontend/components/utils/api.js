@@ -1,11 +1,10 @@
-export async function sendTrainRequest({ pipeline, selectedItems, date, dataFile, prevResultsFile }) {
+export async function sendTrainRequest({ pipeline, selectedItems, date, dataFile }) {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
   const formData = new FormData();
   formData.append('pipeline', pipeline);
   formData.append('items', JSON.stringify(selectedItems));
   formData.append('date', date);
   formData.append('data_file', dataFile);
-  formData.append('prev_results_file', prevResultsFile);
 
   let url = backendUrl.replace(/\/$/, '') + '/train/';
   let response;
