@@ -254,8 +254,9 @@ def generate_timeseries_predictions(
                     if show_prediction_status:
                         print(f'\t\tTarget: {target_column}')
                     
-                    # Define model path
-                    model_path = f"models/{company}/base_{company}_{factor}_{target_column}_{prediction_date.strftime('%B%Y')}_{metric}"
+                    # Define model path - используем абсолютный путь
+                    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../models'))
+                    model_path = os.path.join(models_dir, company, f"base_{company}_{factor}_{target_column}_{prediction_date.strftime('%B%Y')}_{metric}")
                     
                     # Delete previous model if requested
                     if delete_previous_models and os.path.exists(model_path):

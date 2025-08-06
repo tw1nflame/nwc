@@ -45,6 +45,16 @@ async def train(
     date: str = Form(...),
     data_file: UploadFile = File(...)
 ):
+    # Проверяем, не выполняется ли уже обучение
+    task_id = training_status_manager.get_current_task_id()
+    if task_id:
+        res = AsyncResult(task_id)
+        if res.state in ['PENDING', 'STARTED', 'RETRY']:
+            raise HTTPException(
+                status_code=409,
+                detail="Обучение уже выполняется. Дождитесь завершения или остановите текущую задачу."
+            )
+    
     data_path = os.path.join(TRAINING_FILES_DIR, f"uploaded_data_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     with open(data_path, "wb") as f:
         shutil.copyfileobj(data_file.file, f)

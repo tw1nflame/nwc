@@ -228,10 +228,10 @@ function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onC
       case "pending":
         return {
           color: "blue",
-          icon: Loader2,
+          icon: null,
           text: "Обучение запущено...",
           bgClass: "bg-blue-50 border-blue-200 text-blue-800",
-          iconClass: "text-blue-600 animate-spin",
+          iconClass: "",
         }
       case "done":
         return {
@@ -284,7 +284,7 @@ function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onC
     >
       {/* Основной статус */}
       <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass} font-medium`}>
-        <Icon className={`w-5 h-5 ${config.iconClass}`} />
+        {Icon && <Icon className={`w-5 h-5 ${config.iconClass}`} />}
         <span>{config.text}</span>
         {trainStatus?.status === "done" && (
           <Button

@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
-RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results'))
+RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
 TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'training_files'))
 
 @celery_app.task(bind=True, track_started=True)
@@ -87,8 +87,13 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
         training_status_manager.clear_training_progress()
         
         # Проверяем, была ли задача отменена
-        from celery.exceptions import Revoked
-        if isinstance(e, Revoked):
-            return {"status": "revoked", "error": "Task was revoked"}
-        else:
-            return {"status": "error", "error": str(e)}
+        try:
+            from celery.exceptions import Revoked
+            if isinstance(e, Revoked):
+                return {"status": "revoked", "error": "Task was revoked"}
+        except ImportError:
+            # Fallback для совместимости с разными версиями Celery
+            if 'revoked' in str(e).lower():
+                return {"status": "revoked", "error": "Task was revoked"}
+        
+        return {"status": "error", "error": str(e)}

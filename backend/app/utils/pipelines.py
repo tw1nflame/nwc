@@ -376,10 +376,18 @@ def run_base_plus_pipeline(
     DF_FEATURE_IMPORTANCE = pd.concat(feature_importance_dfs)
 
     # Saving to a single file
-    path = "results"
-    file = result_file_name
+    # Используем dirname из result_file_name, если он содержит полный путь
+    if os.path.dirname(result_file_name):
+        # result_file_name уже содержит полный путь
+        file_path = result_file_name
+        path = os.path.dirname(result_file_name)
+    else:
+        # Создаем путь относительно текущего файла
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
+        file_path = os.path.join(path, result_file_name)
+    
     os.makedirs(path, exist_ok=True)
-    with pd.ExcelWriter(f"{path}/{file}") as writer:
+    with pd.ExcelWriter(file_path) as writer:
         all_models.to_excel(writer, sheet_name='data', index=False)
         LINREG_WITH_INTERCEPT_WEIGHTS_DF.to_excel(writer, sheet_name='coeffs_with_intercept', index=False)
         LINREG_NO_INTERCEPT_WEIGHTS_DF.to_excel(writer, sheet_name='coeffs_no_intercept', index=False)
@@ -556,7 +564,7 @@ def run_base_pipeline(
             drop_covariates_features=True, # Удаляем фичи для BASE предикта
             delete_previous_models=False, 
             show_prediction_status=True,
-            models={'Chronos': {'model_path': 'pretrained_models/chronos-bolt-base', 'ag_args': {'name_suffix': 'ZeroShot'}}}
+            models={'Chronos': {'model_path': os.path.abspath(os.path.join(os.path.dirname(__file__), '../../pretrained_models/chronos-bolt-base')), 'ag_args': {'name_suffix': 'ZeroShot'}}}
         )
 
         # Обработка Chronos_base
@@ -724,10 +732,18 @@ def run_base_pipeline(
     DF_ENSMBLE_INFO = pd.concat(ensemble_info_dfs)
 
     # Saving to a single file
-    path = "results"
-    file = result_file_name
+    # Используем dirname из result_file_name, если он содержит полный путь
+    if os.path.dirname(result_file_name):
+        # result_file_name уже содержит полный путь
+        file_path = result_file_name
+        path = os.path.dirname(result_file_name)
+    else:
+        # Создаем путь относительно текущего файла
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
+        file_path = os.path.join(path, result_file_name)
+    
     os.makedirs(path, exist_ok=True)
-    with pd.ExcelWriter(f"{path}/{file}") as writer:
+    with pd.ExcelWriter(file_path) as writer:
         all_models.to_excel(writer, sheet_name='data', index=False)
         LINREG_WITH_INTERCEPT_WEIGHTS_DF.to_excel(writer, sheet_name='coeffs_with_intercept', index=False)
         LINREG_NO_INTERCEPT_WEIGHTS_DF.to_excel(writer, sheet_name='coeffs_no_intercept', index=False)

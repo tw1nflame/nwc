@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3 } from "lucide-react"
+import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/sidebar"
 
 interface AppSidebarProps {
-  currentPage: "training" | "analysis"
-  onPageChange: (page: "training" | "analysis") => void
+  currentPage: "training" | "analysis" | "export"
+  onPageChange: (page: "training" | "analysis" | "export") => void
 }
 
 export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
@@ -82,7 +82,17 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
                   className="w-full justify-start"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Визуализация и выгрузка</span>
+                  <span>Визуализация и Анализ</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onPageChange("export")}
+                  isActive={currentPage === "export"}
+                  className="w-full justify-start"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Выгрузка и корректировки</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
