@@ -36,7 +36,9 @@ app.add_middleware(
 )
 
 TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'training_files'))
+RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results'))
 os.makedirs(TRAINING_FILES_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 @app.post("/train/")
 async def train(
@@ -60,7 +62,7 @@ async def train(
         shutil.copyfileobj(data_file.file, f)
     import json as _json
     items_list = _json.loads(items)
-    result_file_name = os.path.join(TRAINING_FILES_DIR, f"predict_{pipeline}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
+    result_file_name = os.path.join(RESULTS_DIR, f"predict_{pipeline}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     celery_task = train_task.apply_async(args=[pipeline, items_list, date, data_path, result_file_name])
     # Сохраняем актуальный task_id через training_status_manager
     training_status_manager.set_current_task_id(celery_task.id)
