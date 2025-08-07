@@ -32,6 +32,13 @@ def catch_errors(func):
 def setup_custom_logging(log_file="log.txt"):
     """Настройка логирования в файл и в консоль."""
     
+    # Создаем папку logs если она не существует
+    log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../logs'))
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Полный путь к файлу логов
+    log_file_path = os.path.join(log_dir, log_file)
+    
     # Очищаем все предыдущие обработчики у корневого логгера
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
@@ -44,7 +51,7 @@ def setup_custom_logging(log_file="log.txt"):
     )
     
     # Обработчик для записи в файл
-    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
     
@@ -85,11 +92,18 @@ def setup_custom_logging(log_file="log.txt"):
     return root_logger
 
 def setup_logging():
+    # Создаем папку logs если она не существует
+    log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../logs'))
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Полный путь к файлу логов
+    log_file_path = os.path.join(log_dir, 'log.txt')
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('log.txt', mode='a', encoding='utf-8'),
+            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
             logging.StreamHandler()
         ]
     )
