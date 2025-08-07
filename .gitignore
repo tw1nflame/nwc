@@ -60,7 +60,7 @@ db.sqlite3
 # Flask stuff:
 instance/
 .webassets-cache
-
+logs
 # Scrapy stuff:
 .scrapy
 
