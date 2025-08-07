@@ -254,9 +254,8 @@ def generate_timeseries_predictions(
                     if show_prediction_status:
                         print(f'\t\tTarget: {target_column}')
                     
-                    # Define model path - используем абсолютный путь
-                    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../models'))
-                    model_path = os.path.join(models_dir, company, f"base_{company}_{factor}_{target_column}_{prediction_date.strftime('%B%Y')}_{metric}")
+                    # Define model path
+                    model_path = f"models/{company}/base_{company}_{factor}_{target_column}_{prediction_date.strftime('%B%Y')}_{metric}"
                     
                     # Delete previous model if requested
                     if delete_previous_models and os.path.exists(model_path):
@@ -317,12 +316,13 @@ def generate_tabular_predictions(
     ensembles_info = []
     
     for month in months_to_predict:
-        month = month + MonthEnd(0)
         print(f'Прогнозируем для месяца: {month.strftime("%Y-%m-%d")}')
+        prev_month = month - relativedelta(months=1) + MonthEnd(0)
+        month = month + MonthEnd(0)
         
         # Подготовка данных
-        train_data = df_tabular[df_tabular[date_column] < month].drop(columns=[date_column])
-        test_data = df_tabular[df_tabular[date_column] == month].drop(columns=[target_column, date_column])
+        train_data = df_tabular[df_tabular[date_column] < prev_month].drop(columns=[date_column])
+        test_data = df_tabular[df_tabular[date_column] == prev_month].drop(columns=[target_column, date_column])
         
         # Обучение модели
         predictor = TabularPredictor(
@@ -437,25 +437,10 @@ def generate_svr_predictions(
             # Подготовка обучающих данных для текущего месяца
             window_train_df = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
             window_pred_df = all_models.loc[all_models[date_column] == pred_month_end]
-            data = window_train_df.drop(columns=[date_column]).dropna(subset=[ts_prediction_column])
+            
             # Проверка размера окна
-            print(f"\n[DEBUG] SVR window: {window}")
-            print(f"[DEBUG] pred_month_end: {pred_month_end}")
-            print(f"[DEBUG] window_train_df.shape: {window_train_df.shape}")
-            print(f"[DEBUG] window_train_df['{date_column}'] tail:")
-            print(window_train_df[date_column].tail())
-            print(f"[DEBUG] window_pred_df.shape: {window_pred_df.shape}")
-            print(f"[DEBUG] data.shape: {data.shape}")
-            print(f"[DEBUG] data index:")
-            print(data.index)
+            data = window_train_df.drop(columns=[date_column]).dropna(subset=[ts_prediction_column])
             if len(data) != window:
-                print(f"[ERROR] Data length: {len(data)}, Window: {window}, Date: {pred_month_end}")
-                print(f"[ERROR] data head:")
-                print(data.head())
-                print(f"[ERROR] window_train_df head:")
-                print(window_train_df.head())
-                print(f"[ERROR] all_models[{date_column}] == {pred_month_end}:")
-                print(all_models.loc[all_models[date_column] == pred_month_end])
                 raise ValueError(
                     f'Размер данных ({len(data)}) не соответствует размеру окна ({window}) '
                     f'для даты {pred_month_end.strftime("%Y-%m-%d")}'
