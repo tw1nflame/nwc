@@ -9,7 +9,7 @@ from celery.result import AsyncResult
 from tasks import train_task
 from fastapi.responses import FileResponse, StreamingResponse, Response
 
-from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE
+from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE, process_adjustments_file
 from utils.training_status import training_status_manager
 
 app = FastAPI()
@@ -144,3 +144,55 @@ async def export_excel():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@app.post("/upload_adjustments/")
+async def upload_adjustments(
+    adjustments_file: UploadFile = File(...),
+    date_column: str = Form(default="Дата")
+):
+    """
+    Загружает файл корректировок и обновляет столбец adjustments в основной таблице данных.
+    Полностью перезаписывает все корректировки.
+    
+    Args:
+        adjustments_file: Excel файл с листом 'Корректировки'
+        date_column: имя столбца с датой в Excel (по умолчанию 'Дата')
+    
+    Returns:
+        Статус обработки и количество обработанных корректировок
+    """
+    try:
+        # Проверяем тип файла
+        if not adjustments_file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail="Файл должен быть в формате Excel (.xlsx или .xls)")
+        
+        # Сохраняем временный файл
+        temp_file_path = os.path.join(TRAINING_FILES_DIR, f"adjustments_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
+        with open(temp_file_path, "wb") as f:
+            shutil.copyfileobj(adjustments_file.file, f)
+        
+        # Обрабатываем корректировки
+        result = process_adjustments_file(temp_file_path, date_column)
+        
+        # Удаляем временный файл
+        try:
+            os.remove(temp_file_path)
+        except:
+            pass  # Игнорируем ошибки удаления временного файла
+        
+        return {
+            "status": "success",
+            "message": result["message"],
+            "processed_adjustments": result["processed_adjustments"],
+            "filename": adjustments_file.filename
+        }
+        
+    except Exception as e:
+        # Удаляем временный файл в случае ошибки
+        try:
+            if 'temp_file_path' in locals():
+                os.remove(temp_file_path)
+        except:
+            pass
+        
+        raise HTTPException(status_code=500, detail=f"Ошибка обработки файла корректировок: {str(e)}")

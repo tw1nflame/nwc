@@ -58,6 +58,9 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
         for sheet, df in xls.items():
             table = sheet_to_table.get(sheet)
             if table:
+                if table == DATA_TABLE:
+                    # Для основной таблицы сохраняем корректировки перед очисткой
+                    cur.execute(f'CREATE TEMP TABLE temp_adjustments AS SELECT "дата", "статья", adjustments FROM {table} WHERE adjustments IS NOT NULL AND adjustments != 0')
                 cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
         # Загружаем данные из Excel
         for sheet, df in xls.items():
@@ -67,12 +70,32 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
             if df.empty:
                 continue
             df.columns = [c.lower() for c in df.columns]
+            
+            # Для основной таблицы добавляем столбец adjustments если его нет
+            if table == DATA_TABLE and 'adjustments' not in df.columns:
+                df['adjustments'] = 0
+            
             columns = ', '.join(df.columns)
             values_template = ', '.join(['%s'] * len(df.columns))
             insert_query = f'INSERT INTO {table} ({columns}) VALUES ({values_template})'
             records = df.values.tolist()
             for row in records:
                 cur.execute(insert_query, row)
+            
+            # После загрузки основной таблицы восстанавливаем корректировки
+            if table == DATA_TABLE:
+                try:
+                    cur.execute(f'''
+                        UPDATE {table} 
+                        SET adjustments = temp_adjustments.adjustments 
+                        FROM temp_adjustments 
+                        WHERE {table}."дата" = temp_adjustments."дата" 
+                        AND {table}."статья" = temp_adjustments."статья"
+                    ''')
+                    cur.execute('DROP TABLE IF EXISTS temp_adjustments')
+                except:
+                    # Игнорируем ошибки если временная таблица не создана
+                    pass
         
         # Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют,
         # удаляем данные по указанной дате из соответствующих таблиц
@@ -125,6 +148,81 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
         conn.close()
 
 from io import BytesIO
+
+def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
+    """
+    Обрабатывает файл корректировок и обновляет столбец adjustments в DATA_TABLE.
+    Полностью перезаписывает все корректировки.
+    
+    Args:
+        file_path: путь к Excel файлу с корректировками
+        date_column: имя столбца с датой в Excel (например, 'Дата')
+    """
+    # Читаем файл корректировок
+    df_adjustments = pd.read_excel(file_path, sheet_name='Корректировки')
+    
+    # Проверяем обязательные столбцы
+    required_columns = ['Статья', 'Год', 'Месяц', 'Корректировка, руб']
+    missing_columns = [col for col in required_columns if col not in df_adjustments.columns]
+    if missing_columns:
+        raise ValueError(f"Отсутствуют обязательные столбцы в файле корректировок: {missing_columns}")
+    
+    # Формируем дату из года и месяца (последний день месяца)
+    df_adjustments['Дата'] = pd.to_datetime(
+        df_adjustments['Год'].astype(str) + '-' + 
+        df_adjustments['Месяц'].astype(str).str.zfill(2) + '-01'
+    ) + pd.offsets.MonthEnd(0)
+    
+    # Группируем корректировки по дате и статье, суммируем значения
+    adjustments_grouped = df_adjustments.groupby(['Дата', 'Статья'])['Корректировка, руб'].sum().reset_index()
+    
+    # Преобразуем дату в формат для БД
+    adjustments_grouped['Дата'] = adjustments_grouped['Дата'].dt.date
+    
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    
+    try:
+        cur = conn.cursor()
+        
+        # Преобразуем имя столбца даты из Excel в имя столбца БД
+        db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+        
+        # Сначала обнуляем все корректировки
+        cur.execute(f'UPDATE {DATA_TABLE} SET adjustments = 0')
+        
+        # Обновляем корректировки для каждой записи
+        for _, row in adjustments_grouped.iterrows():
+            adjustment_value = row['Корректировка, руб']
+            date_value = row['Дата']
+            article_value = row['Статья']
+            
+            update_query = f"""
+            UPDATE {DATA_TABLE} 
+            SET adjustments = %s 
+            WHERE {db_date_column} = %s AND "статья" = %s
+            """
+            cur.execute(update_query, (adjustment_value, date_value, article_value))
+        
+        conn.commit()
+        cur.close()
+        
+        return {
+            "status": "success", 
+            "processed_adjustments": len(adjustments_grouped),
+            "message": f"Обработано {len(adjustments_grouped)} корректировок"
+        }
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
     """

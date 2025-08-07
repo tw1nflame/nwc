@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { downloadExcel } from "./utils/downloadExcel"
+import { uploadAdjustments } from "./utils/uploadAdjustments"
 
 function FileInput({
   label,
@@ -158,25 +159,17 @@ export function ExportPage() {
     setUploadMessage("")
 
     try {
-      // TODO: Здесь будет вызов API для загрузки файла корректировок
-      // const formData = new FormData()
-      // formData.append('correction_file', correctionFile)
-      // const response = await fetch('/api/corrections/upload', {
-      //   method: 'POST',
-      //   body: formData
-      // })
-      
-      // Имитация загрузки
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
+      const result = await uploadAdjustments(correctionFile) as any
       setUploadStatus("success")
+      setUploadMessage(`Успешно обработано ${result.processed_adjustments} корректировок`)
+      // Очищаем файл после успешной загрузки
       setTimeout(() => {
-        setUploadStatus("idle")
         setCorrectionFile(null)
+        setUploadStatus("idle")
       }, 3000)
     } catch (error) {
       setUploadStatus("error")
-      setUploadMessage("Ошибка при загрузке файла корректировок")
+      setUploadMessage(error instanceof Error ? error.message : "Неизвестная ошибка")
     }
   }
 

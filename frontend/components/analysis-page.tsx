@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { useExcelContext } from "../context/ExcelContext"
 import { motion } from "framer-motion"
-import { BarChart3, TrendingUp, AlertTriangle } from "lucide-react"
+import { BarChart3, TrendingUp, AlertTriangle, Table } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -42,7 +42,7 @@ function excelSerialToDate(serial: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-function ForecastChart({ data, mainModelLower }: { data: any[], mainModelLower?: string }) {
+function ForecastChart({ data, mainModelLower, forecastType = 'original' }: { data: any[], mainModelLower?: string, forecastType?: 'original' | 'corrected' }) {
   // data: [{ model, data: [...] }, ...]
   // Merge all models' data by date
   const dates = Array.from(new Set(data.flatMap(d => d.data.map((row: any) => typeof row.date === 'number' ? excelSerialToDate(row.date) : row.date))));
@@ -60,6 +60,9 @@ function ForecastChart({ data, mainModelLower }: { data: any[], mainModelLower?:
   const modelColors = [
     '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
   ];
+  
+  const forecastLabel = forecastType === 'corrected' ? 'Скорректированный прогноз' : 'Прогноз';
+  
   return (
     <ChartContainer config={chartConfig} className="w-full h-[400px]">
       <ResponsiveContainer width="100%" height="100%">
@@ -87,7 +90,7 @@ function ForecastChart({ data, mainModelLower }: { data: any[], mainModelLower?:
               stroke={modelColors[idx % modelColors.length]}
               strokeWidth={3}
               dot={{ fill: modelColors[idx % modelColors.length], strokeWidth: 2, r: 4 }}
-              name={`Прогноз (${model})`}
+              name={`${forecastLabel} (${model})`}
               strokeDasharray={mainModelLower && model.toLowerCase() === mainModelLower ? undefined : "6 4"}
             />
           ))}
@@ -187,6 +190,8 @@ export function AnalysisPage() {
   const [chartLoading, setChartLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showFullTable, setShowFullTable] = useState(false)
+  const [forecastType, setForecastType] = useState<'original' | 'corrected'>('original')
+  const [currency, setCurrency] = useState<'RUB' | 'USD'>('RUB')
   const {
     excelBuffer,
     setExcelBuffer,
@@ -215,6 +220,22 @@ export function AnalysisPage() {
   useEffect(() => {
     if (!selectedArticle || models.length === 0) return;
     
+    // Если выбран скорректированный прогноз, принудительно выбираем только целевую модель
+    if (forecastType === 'corrected') {
+      if (mainModelLower) {
+        const found = models.find((m: string) => m.toLowerCase() === mainModelLower);
+        if (found) {
+          setSelectedModels([found]);
+          return;
+        }
+      }
+      // Если целевая модель не найдена, но выбран скорректированный прогноз, выбираем первую модель
+      if (models.length > 0) {
+        setSelectedModels([models[0]]);
+      }
+      return;
+    }
+    
     // Выбираем главную модель только если еще ничего не выбрано
     if (selectedModels.length === 0) {
       if (mainModelLower) {
@@ -229,7 +250,7 @@ export function AnalysisPage() {
         setSelectedModels([models[0]]);
       }
     }
-  }, [mainModelLower, models, selectedArticle, selectedModels.length]);
+  }, [mainModelLower, models, selectedArticle, selectedModels.length, forecastType]);
 
   useEffect(() => {
     async function fetchData() {
@@ -299,19 +320,41 @@ export function AnalysisPage() {
           return rowArticleName === selectedArticleLower;
         }
       });
+      
       // Для каждой модели — свой массив данных
       const allChartData = selectedModels.map(model => ({
         model,
-        data: filtered.map((row: any) => ({
-          date: row["Дата"],
-          actual: row["Fact"],
-          forecast: row[`predict_${model}`],
-          // Берем готовые значения из Excel (обратите внимание на пробелы в названиях)
-          errorPercent: row[`predict_${model} отклонение  %`], // два пробела перед %
-          difference: row[`predict_${model} разница`],
-          // Оставляем старый расчет как fallback для совместимости
-          error: row[`predict_${model} отклонение  %`] || (row[`predict_${model}`] && row["Fact"] ? Number((((row[`predict_${model}`] - row["Fact"]) / row["Fact"]) * 100).toFixed(2)) : null)
-        }))
+        data: filtered.map((row: any) => {
+          const originalForecast = row[`predict_${model}`];
+          const adjustments = row["Корректировка, руб"] || 0;
+          
+          // Если выбран скорректированный прогноз, добавляем корректировку
+          const forecast = forecastType === 'corrected' 
+            ? (originalForecast || 0) + adjustments 
+            : originalForecast;
+          
+          // Пересчитываем ошибку и разность для скорректированного прогноза
+          const errorPercent = forecastType === 'corrected' && forecast && row["Fact"]
+            ? Number((((forecast - row["Fact"]) / row["Fact"]) * 100).toFixed(2))
+            : row[`predict_${model} отклонение  %`];
+          
+          const difference = forecastType === 'corrected' && forecast && row["Fact"]
+            ? forecast - row["Fact"]
+            : row[`predict_${model} разница`];
+          
+          return {
+            date: row["Дата"],
+            actual: row["Fact"],
+            forecast: forecast,
+            originalForecast: originalForecast,
+            adjustments: adjustments,
+            // Берем готовые значения из Excel (обратите внимание на пробелы в названиях)
+            errorPercent: errorPercent,
+            difference: difference,
+            // Оставляем старый расчет как fallback для совместимости
+            error: errorPercent || (forecast && row["Fact"] ? Number((((forecast - row["Fact"]) / row["Fact"]) * 100).toFixed(2)) : null)
+          }
+        })
       }));
       
       setChartData(allChartData);
@@ -319,7 +362,7 @@ export function AnalysisPage() {
       setChartData([]);
     }
     setTimeout(() => setChartLoading(false), 300);
-  }, [selectedArticle, selectedModels, parsedJson]);
+  }, [selectedArticle, selectedModels, parsedJson, forecastType]);
 
   return (
     <main className="flex-1 p-8">
@@ -342,49 +385,126 @@ export function AnalysisPage() {
             <div className="text-center py-8 text-lg text-gray-500">Загрузка данных...</div>
           ) : (
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <Label className="text-gray-800 font-semibold">Статья ЧОК</Label>
-                <Select 
-                  value={selectedArticle} 
-                  onValueChange={(newArticle) => {
-                    setSelectedArticle(newArticle);
-                    // При смене статьи сбрасываем выбор моделей, чтобы useEffect выбрал главную модель
-                    setSelectedModels([]);
-                  }}
-                >
-                  <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {articles.map((article) => (
-                      <SelectItem key={article} value={article}>
-                        {article}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-gray-800 font-semibold">Статья ЧОК</Label>
+                  <Select 
+                    value={selectedArticle} 
+                    onValueChange={(newArticle) => {
+                      setSelectedArticle(newArticle);
+                      // При смене статьи сбрасываем выбор моделей, чтобы useEffect выбрал главную модель
+                      setSelectedModels([]);
+                    }}
+                  >
+                    <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                      <SelectValue placeholder="Выберите статью ЧОК" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {articles.map((article) => (
+                        <SelectItem key={article} value={article}>
+                          {article}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="forecastType"
+                        value="original"
+                        checked={forecastType === 'original'}
+                        onChange={(e) => {
+                          setForecastType(e.target.value as 'original' | 'corrected');
+                        }}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Исходный прогноз</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="forecastType"
+                        value="corrected"
+                        checked={forecastType === 'corrected'}
+                        onChange={(e) => {
+                          setForecastType(e.target.value as 'original' | 'corrected');
+                          if (e.target.value === 'corrected') {
+                            // При переключении на скорректированный прогноз сбрасываем выбор моделей
+                            // useEffect автоматически выберет целевую модель
+                            setSelectedModels([]);
+                          }
+                        }}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Скорректированный прогноз</span>
+                    </label>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="currency"
+                        value="RUB"
+                        checked={currency === 'RUB'}
+                        onChange={(e) => setCurrency(e.target.value as 'RUB' | 'USD')}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">RUB</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="currency"
+                        value="USD"
+                        checked={currency === 'USD'}
+                        onChange={(e) => setCurrency(e.target.value as 'RUB' | 'USD')}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">USD</span>
+                    </label>
+                  </div>
+                </div>
               </div>
+              
               <div className="space-y-3">
                 <Label className="text-gray-800 font-semibold">Модели</Label>
                 <div className="flex flex-wrap gap-2">
-                  {models.map((model) => (
-                    <label key={model} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedModels.includes(model)}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setSelectedModels([...selectedModels, model]);
-                          } else {
-                            setSelectedModels(selectedModels.filter(m => m !== model));
-                          }
-                        }}
-                      />
-                      <span
-                        style={{ fontWeight: mainModelLower && model.toLowerCase() === mainModelLower ? 'bold' : 'normal' }}
-                      >{model}</span>
-                    </label>
-                  ))}
+                  {models.map((model) => {
+                    const isMainModel = mainModelLower && model.toLowerCase() === mainModelLower;
+                    const isDisabled = forecastType === 'corrected' && !isMainModel;
+                    
+                    return (
+                      <label key={model} className={`flex items-center gap-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedModels.includes(model)}
+                          disabled={isDisabled}
+                          onChange={e => {
+                            if (isDisabled) return;
+                            if (e.target.checked) {
+                              setSelectedModels([...selectedModels, model]);
+                            } else {
+                              setSelectedModels(selectedModels.filter(m => m !== model));
+                            }
+                          }}
+                          className="accent-blue-600 focus:ring-blue-500"
+                        />
+                        <span
+                          style={{ fontWeight: isMainModel ? 'bold' : 'normal' }}
+                        >
+                          {model}
+                          {isMainModel && (
+                            <span className="ml-1 text-xs text-blue-600">(целевая)</span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -404,8 +524,13 @@ export function AnalysisPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="text-gray-900">Данные по статье: {selectedArticle}</CardTitle>
-                        <CardDescription>Детальные данные с отклонениями и разницей для всех выбранных моделей</CardDescription>
+                        <CardTitle className="flex items-center gap-2 text-gray-900">
+                          <Table className="w-5 h-5 text-green-600" />
+                          Данные по статье: {selectedArticle}
+                        </CardTitle>
+                        <CardDescription>
+                          Детальные данные с отклонениями и разницей для всех выбранных моделей
+                        </CardDescription>
                       </div>
                       <Button
                         variant="outline"
@@ -423,14 +548,17 @@ export function AnalysisPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex">
+                      <div className="flex">
                       {/* Фиксированные колонки: Дата и Факт */}
                       <div className="flex-none">
                         <table className="border-collapse text-sm">
                           <thead>
                             <tr className="border-b border-gray-200 bg-gray-50">
-                              <th className="text-left py-3 px-3 font-semibold text-gray-900 border-r border-gray-300 min-w-[100px]">Дата</th>
-                              <th className="text-center py-3 px-3 font-semibold text-gray-900 border-r border-gray-400 min-w-[100px]">Факт</th>
+                              <th className="text-left py-3 px-3 font-semibold text-gray-900 border-r border-gray-300 min-w-[100px] h-[72px] align-middle">Дата</th>
+                              <th className="text-center py-3 px-3 font-semibold text-gray-900 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Факт</th>
+                              {forecastType === 'corrected' && (
+                                <th className="text-center py-3 px-3 font-semibold text-orange-700 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Корректировка</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
@@ -444,29 +572,34 @@ export function AnalysisPage() {
                                 <td className="py-3 px-3 text-center font-medium text-gray-700 border-r border-gray-400">
                                   {row.actual !== null && row.actual !== undefined ? Number(row.actual).toLocaleString() : '-'}
                                 </td>
+                                {forecastType === 'corrected' && (
+                                  <td className="py-3 px-3 text-center font-medium text-orange-700 border-r border-gray-400">
+                                    {row.adjustments !== null && row.adjustments !== undefined && row.adjustments !== 0 
+                                      ? Number(row.adjustments).toLocaleString() 
+                                      : '0'}
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                      
-                      {/* Прокручиваемые колонки: данные моделей */}
+                      </div>                      {/* Прокручиваемые колонки: данные моделей */}
                       <div className="flex-1 overflow-x-auto">
                         <table className="border-collapse text-sm w-full">
                           <thead>
                             <tr className="border-b border-gray-200 bg-gray-50">
                               {selectedModels.map((model, modelIndex) => (
                                 <React.Fragment key={model}>
-                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 ${modelIndex < selectedModels.length - 1 ? 'border-r border-gray-300' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '120px' }}>
-                                    Прогноз ({model})
+                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle ${modelIndex === 0 ? 'border-l-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '120px' }}>
+                                    {forecastType === 'corrected' ? 'Скорректированный' : 'Прогноз'} ({model})
                                     {mainModelLower && model.toLowerCase() === mainModelLower && (
                                       <span className="ml-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
                                         целевая
                                       </span>
                                     )}
                                   </th>
-                                  <th className="text-center py-3 px-3 font-semibold text-gray-700" style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Отклонение %</th>
-                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Разница</th>
+                                  <th className="text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle" style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Отклонение %</th>
+                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Разница</th>
                                 </React.Fragment>
                               ))}
                             </tr>
@@ -483,13 +616,13 @@ export function AnalysisPage() {
                                   
                                   return (
                                     <React.Fragment key={model}>
-                                      <td className={`py-3 px-3 text-center font-medium ${isMainModel ? 'text-blue-700 bg-blue-50' : 'text-gray-700'} ${modelIndex < selectedModels.length - 1 ? 'border-r border-gray-300' : ''}`}>
+                                      <td className={`py-3 px-3 text-center font-medium text-gray-700 ${modelIndex === 0 ? 'border-l-2 border-gray-500' : ''}`}>
                                         {modelRow?.forecast !== null && modelRow?.forecast !== undefined ? Number(modelRow.forecast).toLocaleString() : '-'}
                                       </td>
-                                      <td className={`py-3 px-3 text-center font-medium ${isMainModel ? 'text-blue-700 bg-blue-50' : 'text-gray-700'}`}>
+                                      <td className={`py-3 px-3 text-center font-medium text-gray-700`}>
                                         {modelRow?.errorPercent !== null && modelRow?.errorPercent !== undefined ? `${Number(modelRow.errorPercent).toFixed(2)}%` : '-'}
                                       </td>
-                                      <td className={`py-3 px-3 text-center font-medium ${isMainModel ? 'text-blue-700 bg-blue-50' : 'text-gray-700'} ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`}>
+                                      <td className={`py-3 px-3 text-center font-medium text-gray-700 ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`}>
                                         {modelRow?.difference !== null && modelRow?.difference !== undefined ? Number(modelRow.difference).toLocaleString() : '-'}
                                       </td>
                                     </React.Fragment>
@@ -522,23 +655,25 @@ export function AnalysisPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-gray-900">
                       <TrendingUp className="w-5 h-5 text-blue-600" />
-                      {`Прогноз vs Факт`}
+                      {forecastType === 'corrected' ? 'Скорректированный прогноз vs Факт' : 'Прогноз vs Факт'}
                     </CardTitle>
                     <CardDescription>
-                      Сравнение прогнозируемых и фактических значений по датам для {selectedArticle} и всех выбранных моделей
+                      Сравнение {forecastType === 'corrected' ? 'скорректированных (прогноз + корректировки)' : 'прогнозируемых'} и фактических значений по датам для {selectedArticle} и всех выбранных моделей
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ForecastChart data={chartData} mainModelLower={mainModelLower} />
+                    <ForecastChart data={chartData} mainModelLower={mainModelLower} forecastType={forecastType} />
                   </CardContent>
                 </Card>
                 <Card className="shadow-lg border-gray-200 bg-white mb-8">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-gray-900">
                       <AlertTriangle className="w-5 h-5 text-amber-600" />
-                      {`Ошибка %`}
+                      Ошибка %
                     </CardTitle>
-                    <CardDescription>Ошибка прогноза в процентах по датам для {selectedArticle} и всех выбранных моделей</CardDescription>
+                    <CardDescription>
+                      Ошибка {forecastType === 'corrected' ? 'скорректированного прогноза' : 'прогноза'} в процентах по датам для {selectedArticle} и всех выбранных моделей
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ErrorChart data={chartData} mainModelLower={mainModelLower} />
@@ -548,9 +683,11 @@ export function AnalysisPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-gray-900">
                       <BarChart3 className="w-5 h-5 text-purple-600" />
-                      {`Разница`}
+                      Разница
                     </CardTitle>
-                    <CardDescription>Абсолютная разница между прогнозом и фактом по датам для {selectedArticle} и всех выбранных моделей</CardDescription>
+                    <CardDescription>
+                      Разница между {forecastType === 'corrected' ? 'скорректированным прогнозом' : 'прогнозом'} и фактом по датам для {selectedArticle} и всех выбранных моделей
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AbsoluteDiffChart data={chartData} mainModelLower={mainModelLower} />
