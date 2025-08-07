@@ -539,6 +539,7 @@ def run_base_pipeline(
         # ----------------------------------
         # Предикт Chronos_base | BASE
         # ----------------------------------
+        chronos_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'pretrained_models', 'chronos-bolt-base'))
         df_predict, _ = generate_timeseries_predictions(
             df=df, 
             months_to_predict=[CHOSEN_MONTH], 
@@ -550,7 +551,7 @@ def run_base_pipeline(
             drop_covariates_features=True, # Удаляем фичи для BASE предикта
             delete_previous_models=False, 
             show_prediction_status=True,
-            models={'Chronos': {'model_path': 'pretrained_models/chronos-bolt-base', 'ag_args': {'name_suffix': 'ZeroShot'}}}
+            models={'Chronos': {'model_path': chronos_model_path, 'ag_args': {'name_suffix': 'ZeroShot'}}}
         )
 
         # Обработка Chronos_base
