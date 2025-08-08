@@ -123,21 +123,39 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
                 continue
             
             logger.info(f"Обработка листа '{sheet}' -> таблица '{table}', строк: {len(df)}")
+            logger.info(f"Форма DataFrame: {df.shape} (строки x колонки)")
+            logger.info(f"Исходные колонки ({len(df.columns)}): {list(df.columns)}")
             
             # Применяем маппинг колонок из Excel в БД
             original_columns = df.columns.tolist()
             df.columns = [COLUMN_MAPPING.get(col, col) for col in df.columns]
             mapped_columns = df.columns.tolist()
             logger.debug(f"Маппинг колонок для {sheet}: {dict(zip(original_columns, mapped_columns))}")
+            logger.info(f"Колонки после маппинга ({len(df.columns)}): {list(df.columns)}")
             
             columns = ', '.join([f'"{col}"' for col in df.columns])
             values_template = ', '.join(['%s'] * len(df.columns))
             insert_query = f'INSERT INTO {table} ({columns}) VALUES ({values_template})'
             
+            logger.info(f"SQL запрос: {insert_query}")
+            logger.info(f"Ожидается {len(df.columns)} значений, колонки: {list(df.columns)}")
+            
             records = df.values.tolist()
+            logger.info(f"Первые 3 строки данных:")
+            for i, row in enumerate(records[:3]):
+                logger.info(f"  Строка {i+1}: {len(row)} значений - {row}")
+            
             inserted_rows = 0
             for i, row in enumerate(records):
                 try:
+                    if len(row) != len(df.columns):
+                        logger.error(f"Несоответствие количества значений в строке {i+1}:")
+                        logger.error(f"  Ожидается: {len(df.columns)} значений")
+                        logger.error(f"  Получено: {len(row)} значений")
+                        logger.error(f"  Колонки ({len(df.columns)}): {list(df.columns)}")
+                        logger.error(f"  Значения ({len(row)}): {row}")
+                        raise ValueError(f"Количество значений ({len(row)}) не соответствует количеству колонок ({len(df.columns)})")
+                    
                     cur.execute(insert_query, row)
                     inserted_rows += 1
                 except Exception as e:

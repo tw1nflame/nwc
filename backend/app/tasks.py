@@ -8,6 +8,9 @@ from utils.training_status import training_status_manager
 import os
 from datetime import datetime
 
+# Устанавливаем флаг для Celery worker чтобы избежать дублирования логов
+os.environ['CELERY_WORKER_PROCESS'] = '1'
+
 # Создаем директорию для логов
 log_dir = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(log_dir, exist_ok=True)

@@ -66,7 +66,9 @@ def setup_custom_logging(log_file="log.txt"):
     
     # Добавляем обработчики
     root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
+    # Только добавляем console_handler если не в Celery worker
+    if not os.environ.get('CELERY_WORKER_PROCESS'):
+        root_logger.addHandler(console_handler)
     root_logger.addHandler(stderr_handler)
 
     # Ловим warnings (например, DeprecationWarning)
@@ -81,10 +83,17 @@ def setup_custom_logging(log_file="log.txt"):
 
     sys.excepthook = handle_uncaught_exception
     
-    # Убираем лишние обработчики у логгеров AutoGluon
+    # Настраиваем AutoGluon логирование
     ag_logger = logging.getLogger("autogluon")
-    ag_logger.handlers = []  # Удаляем все обработчики AutoGluon
-    ag_logger.propagate = True  # Разрешаем передачу в корневой логгер
+    # Не удаляем обработчики AutoGluon, просто позволяем им работать
+    ag_logger.propagate = False  # Не передаем в корневой логгер чтобы избежать дублирования
+    
+    # Если AutoGluon еще не настроен, добавляем консольный обработчик
+    if not ag_logger.handlers:
+        ag_console_handler = logging.StreamHandler(sys.stdout)
+        ag_console_handler.setFormatter(logging.Formatter('%(message)s'))  # Простой формат для AutoGluon
+        ag_logger.addHandler(ag_console_handler)
+        ag_logger.setLevel(logging.INFO)
     
     return root_logger
 
