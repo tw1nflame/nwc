@@ -69,6 +69,7 @@ COLUMN_MAPPING = {
     
     # Для корректировок
     'Корректировка, руб': 'adjustment_value',
+    'Описание': 'description',
 }
 
 # Обратный маппинг: БД → Excel

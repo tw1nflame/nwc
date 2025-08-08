@@ -558,7 +558,7 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                 
                 # Получаем корректировки из отдельной таблицы
                 try:
-                    df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
+                    df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', conn)
                     logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
                     
                     # Создаем дату из года и месяца для объединения
@@ -566,22 +566,30 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                         df_adjustments['year'].astype(str) + '-' + 
                         df_adjustments['month'].astype(str).str.zfill(2) + '-01'
                     ) + pd.offsets.MonthEnd(0)
-                    df_adjustments['date'] = df_adjustments['date'].dt.date
+                    
+                    # Убеждаемся, что типы дат совпадают для корректного объединения
+                    if 'date' in df_data.columns:
+                        df_data['date'] = pd.to_datetime(df_data['date'])
+                        df_adjustments['date'] = pd.to_datetime(df_adjustments['date'])
+                        logger.info(f"Типы дат приведены к единому формату: df_data.date = {df_data['date'].dtype}, df_adjustments.date = {df_adjustments['date'].dtype}")
+                    
                     
                     # Объединяем данные с корректировками
                     df_data = df_data.merge(
-                        df_adjustments[['date', 'article', 'adjustment_value']], 
+                        df_adjustments[['date', 'article', 'adjustment_value', 'description']], 
                         left_on=['date', 'article'], 
                         right_on=['date', 'article'], 
                         how='left'
                     )
-                    # Заполняем пропуски нулями для корректировок
+                    # Заполняем пропуски нулями для корректировок и пустыми строками для описаний
                     df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
+                    df_data['description'] = df_data['description'].fillna('')
                     logger.info(f"Данные объединены с корректировками: {len(df_data)} строк, корректировок с ненулевыми значениями: {(df_data['adjustment_value'] != 0).sum()}")
                 except Exception as adj_error:
                     logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
                     # Если таблица корректировок не существует, добавляем нулевые корректировки
                     df_data['adjustment_value'] = 0
+                    df_data['description'] = ''
                     logger.info("Добавлены нулевые корректировки")
                 
                 # Применяем маппинг к колонкам
@@ -607,8 +615,9 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                     if not mapped_pred_col:
                         continue
                     
-                    # Получаем значение корректировки
+                    # Получаем значение корректировки и описание
                     adjustment = row.get('Корректировка, руб', 0) or 0
+                    description = row.get('Описание', '') or ''
                     
                     final_rows.append({
                         'Дата': row.get('Дата'),
@@ -616,10 +625,11 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                         'Fact': row.get('Fact'),
                         'Прогноз': row.get(mapped_pred_col),
                         'Корректировка': adjustment,
+                        'Описание': description,
                         'Модель': model_name
                     })
                     
-                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Модель'])
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Описание', 'Модель'])
                 df_final.to_excel(writer, index=False, sheet_name='final_prediction')
                 sheets_exported += 1
                 total_rows_exported += len(df_final)
@@ -645,8 +655,17 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
             
             # Добавляем лист с корректировками, если таблица существует
             try:
-                df_adjustments = pd.read_sql_query(f'SELECT "date", "article", adjustment_value FROM {ADJUSTMENTS_TABLE}', conn)
+                df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
                 if not df_adjustments.empty:
+                    # Создаем дату из года и месяца для отображения
+                    df_adjustments['date'] = pd.to_datetime(
+                        df_adjustments['year'].astype(str) + '-' + 
+                        df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                    ) + pd.offsets.MonthEnd(0)
+                    
+                    # Оставляем только нужные колонки для экспорта
+                    df_adjustments = df_adjustments[['date', 'article', 'adjustment_value']]
+                    
                     logger.info(f"Экспорт корректировок: {len(df_adjustments)} строк")
                     # Применяем маппинг к колонкам
                     df_adjustments.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_adjustments.columns]
@@ -659,6 +678,24 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
             except Exception as adj_error:
                 logger.warning(f"Не удалось экспортировать корректировки: {adj_error}")
                 # Таблица корректировок не существует или пуста
+                pass
+            
+            # Добавляем лист с курсами валют, если таблица существует
+            try:
+                df_exchange_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', conn)
+                if not df_exchange_rates.empty:
+                    logger.info(f"Экспорт курсов валют: {len(df_exchange_rates)} строк")
+                    # Применяем маппинг к колонкам
+                    df_exchange_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_exchange_rates.columns]
+                    df_exchange_rates.to_excel(writer, index=False, sheet_name='Курсы валют')
+                    sheets_exported += 1
+                    total_rows_exported += len(df_exchange_rates)
+                    logger.info("Лист Курсы валют добавлен")
+                else:
+                    logger.info("Таблица курсов валют пуста, лист не добавлен")
+            except Exception as rate_error:
+                logger.warning(f"Не удалось экспортировать курсы валют: {rate_error}")
+                # Таблица курсов валют не существует или пуста
                 pass
                 
             logger.info(f"Экспорт завершен: {sheets_exported} листов, {total_rows_exported} общих строк")
