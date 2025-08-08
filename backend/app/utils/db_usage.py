@@ -25,6 +25,8 @@ DB_NAME = os.getenv('DB_NAME')
 
 DATA_TABLE = os.getenv('DATA_TABLE')
 ADJUSTMENTS_TABLE = os.getenv('ADJUSTMENTS_TABLE')
+EXCHANGE_RATE_TABLE = os.getenv('EXCHANGE_RATE_TABLE')
+EXCHANGE_RATE_FILE_PATH = os.getenv('EXCHANGE_RATE_FILE_PATH')
 COEFFS_WITH_INTERCEPT_TABLE = os.getenv('COEFFS_WITH_INTERCEPT_TABLE')
 COEFFS_NO_INTERCEPT_TABLE = os.getenv('COEFFS_NO_INTERCEPT_TABLE')
 ENSEMBLE_INFO_TABLE = os.getenv('ENSEMBLE_INFO_TABLE')
@@ -250,6 +252,137 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
         logger.info("Соединение с БД для pipeline закрыто")
 
 from io import BytesIO
+
+def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', date_column: str = 'Дата'):
+    """
+    Обрабатывает файл с курсами валют и сохраняет их в таблицу EXCHANGE_RATE_TABLE.
+    Полностью дропает таблицу и создает заново при каждой загрузке.
+    
+    Args:
+        file_path: путь к Excel файлу с курсами валют
+        rate_column: название столбца с курсом (по умолчанию 'Курс')
+        date_column: название столбца с датой (по умолчанию 'Дата')
+    
+    Returns:
+        dict: результат операции с количеством обработанных записей
+    """
+    logger.info(f"Начало обработки файла курсов валют: {file_path}")
+    
+    # Читаем Excel файл
+    df = pd.read_excel(file_path)
+    logger.info(f"Загружен Excel файл с курсами: {df.shape} (строки x колонки)")
+    
+    # Транспонируем DataFrame (аналогично datahandler.py)
+    df = (
+        df.T
+        .reset_index()
+        .pipe(lambda x: x.set_axis(x.iloc[0], axis=1))
+        .iloc[1:]
+        .reset_index(drop=True)
+    )
+    logger.info(f"DataFrame после транспонирования: {df.shape}")
+    
+    # Проверяем наличие нужных колонок
+    if rate_column not in df.columns:
+        raise ValueError(f"Колонка '{rate_column}' не найдена в файле")
+    if date_column not in df.columns:
+        raise ValueError(f"Колонка '{date_column}' не найдена в файле")
+    
+    # Оставляем только нужные колонки
+    exchange_data = df[[date_column, rate_column]].copy()
+    logger.info(f"Выбраны колонки для курса: {list(exchange_data.columns)}")
+    
+    # Преобразуем типы данных
+    exchange_data[date_column] = pd.to_datetime(exchange_data[date_column])
+    exchange_data[rate_column] = pd.to_numeric(exchange_data[rate_column], errors='coerce')
+    
+    # Удаляем строки с некорректными данными
+    initial_rows = len(exchange_data)
+    exchange_data = exchange_data.dropna()
+    final_rows = len(exchange_data)
+    
+    if initial_rows != final_rows:
+        logger.warning(f"Удалено {initial_rows - final_rows} строк с некорректными данными")
+    
+    logger.info(f"Подготовлено {len(exchange_data)} записей курса для сохранения")
+    
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    logger.info(f"Подключение к БД для курсов установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    
+    try:
+        cur = conn.cursor()
+        
+        # Проверяем существование таблицы курсов
+        cur.execute(f"""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = '{EXCHANGE_RATE_TABLE}'
+            )
+        """)
+        table_exists = cur.fetchone()[0]
+        
+        if table_exists:
+            # Если таблица существует, дропаем её
+            cur.execute(f'DROP TABLE {EXCHANGE_RATE_TABLE}')
+            logger.info(f"Таблица {EXCHANGE_RATE_TABLE} удалена")
+        else:
+            logger.info(f"Таблица {EXCHANGE_RATE_TABLE} не существовала")
+        
+        # Создаем таблицу курсов заново
+        create_table_sql = f"""
+        CREATE TABLE {EXCHANGE_RATE_TABLE} (
+            id SERIAL PRIMARY KEY,
+            date DATE NOT NULL UNIQUE,
+            exchange_rate DOUBLE PRECISION NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        cur.execute(create_table_sql)
+        logger.info(f"Таблица {EXCHANGE_RATE_TABLE} создана заново")
+        
+        # Вставляем курсы в таблицу (без указания id и created_at)
+        inserted_rates = 0
+        for _, row in exchange_data.iterrows():
+            rate_value = row[rate_column]
+            date_value = row[date_column].date()  # Конвертируем в date
+            
+            insert_query = f"""
+            INSERT INTO {EXCHANGE_RATE_TABLE} (date, exchange_rate)
+            VALUES (%s, %s)
+            """
+            try:
+                cur.execute(insert_query, (date_value, rate_value))
+                inserted_rates += 1
+            except Exception as e:
+                logger.error(f"Ошибка вставки курса для даты {date_value}: {e}")
+                continue
+        
+        logger.info(f"Вставлено {inserted_rates} курсов в таблицу {EXCHANGE_RATE_TABLE}")
+        conn.commit()
+        logger.info("Курсы валют успешно сохранены")
+        
+        cur.close()
+        
+        return {
+            "status": "success", 
+            "processed_rates": inserted_rates,
+            "message": f"Обработано {inserted_rates} курсов валют"
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка при обработке курсов валют: {e}", exc_info=True)
+        conn.rollback()
+        logger.info("Транзакция курсов отменена")
+        raise e
+    finally:
+        conn.close()
+        logger.info("Соединение с БД для курсов закрыто")
 
 def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
     """

@@ -3,7 +3,7 @@ from utils.config import load_config
 from utils.datahandler import load_and_transform_data
 from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
 from utils.common import generate_monthly_period, setup_custom_logging
-from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel
+from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel, process_exchange_rate_file
 from utils.training_status import training_status_manager
 import os
 from datetime import datetime
@@ -17,6 +17,9 @@ os.makedirs(log_dir, exist_ok=True)
 
 # Инициализируем логирование для Celery worker
 logger = setup_custom_logging(os.path.join(log_dir, "celery_worker.log"))
+
+# Получаем путь к файлу курсов из переменных окружения
+EXCHANGE_RATE_FILE_PATH = os.getenv('EXCHANGE_RATE_FILE_PATH')
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
 RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
@@ -40,6 +43,18 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
     df_all_items = load_and_transform_data(data_path, DATE_COLUMN, RATE_COLUMN)
     
     logger.info(f"Конфигурация загружена: {len(ITEMS_TO_PREDICT)} статей для обработки")
+    
+    # Обрабатываем курсы валют перед запуском пайплайна
+    try:
+        if EXCHANGE_RATE_FILE_PATH and os.path.exists(EXCHANGE_RATE_FILE_PATH):
+            logger.info(f"Обновление курсов валют из файла: {EXCHANGE_RATE_FILE_PATH}")
+            exchange_result = process_exchange_rate_file(EXCHANGE_RATE_FILE_PATH, 'Курс', 'Дата')
+            logger.info(f"Курсы валют обновлены: {exchange_result['message']}")
+        else:
+            logger.warning(f"Файл курсов не найден или не указан: {EXCHANGE_RATE_FILE_PATH}")
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении курсов валют: {e}")
+        # Продолжаем выполнение пайплайна, даже если курсы не обновились
     
     # Инициализация статуса обучения
     total_articles = len(ITEMS_TO_PREDICT)
