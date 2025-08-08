@@ -91,7 +91,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             )
             logger.info("BASE+ пайплайн завершен, загрузка в БД")
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
-            set_pipeline_column(DATE_COLUMN, date, 'BASE+')
+            set_pipeline_column(DATE_COLUMN, date, 'BASE+', list(ITEMS_TO_PREDICT.keys()))
             logger.info("Данные BASE+ загружены в БД")
             
         elif pipeline == "BASE":
@@ -114,7 +114,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             )
             logger.info("BASE пайплайн завершен, загрузка в БД")
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
-            set_pipeline_column(DATE_COLUMN, date, 'BASE')
+            set_pipeline_column(DATE_COLUMN, date, 'BASE', list(ITEMS_TO_PREDICT.keys()))
             logger.info("Данные BASE загружены в БД")
         
         # НЕ очищаем прогресс при успешном завершении - оставляем task_id

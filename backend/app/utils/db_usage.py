@@ -202,15 +202,19 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
         conn.close()
         logger.info("Соединение с БД закрыто")
 
-def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
+def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, articles_processed: list = None):
     """
-    Устанавливает значение pipeline в DATA_TABLE для заданной даты.
+    Устанавливает значение pipeline в DATA_TABLE для записей с указанной датой.
+    Если указан список статей, обновляет только эти статьи.
     date_column: имя столбца с датой в Excel (например, 'Дата'), будет преобразовано в имя столбца БД
-    date_value: значение даты (строка в формате 'YYYY-MM-DD')
+    date_value: значение даты прогноза (например, '2025-01-01')
     pipeline_value: 'BASE' или 'BASE+'
+    articles_processed: список статей, которые были обработаны (опционально)
     """
     logger = setup_custom_logging()
-    logger.info(f"Установка pipeline колонки: {date_column}={date_value} -> {pipeline_value}")
+    logger.info(f"Установка pipeline колонки: прогноз на {date_value} -> {pipeline_value}")
+    if articles_processed:
+        logger.info(f"Обрабатываемые статьи: {articles_processed}")
     
     table = DATA_TABLE
     # Преобразуем имя столбца из Excel в имя столбца БД
@@ -228,13 +232,27 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
     
     try:
         cur = conn.cursor()
-        query = f"""
-        UPDATE {table}
-        SET pipeline = %s
-        WHERE "{db_date_column}" = %s
-        """
         
-        cur.execute(query, (pipeline_value, date_value))
+        # Обновляем pipeline для записей по дате и статьям
+        if articles_processed:
+            # Если указаны конкретные статьи, обновляем только их для указанной даты
+            placeholders = ','.join(['%s'] * len(articles_processed))
+            query = f"""
+            UPDATE {table}
+            SET pipeline = %s
+            WHERE DATE("{db_date_column}") = DATE(%s)
+            AND article IN ({placeholders})
+            """
+            cur.execute(query, [pipeline_value, date_value] + articles_processed)
+        else:
+            # Обновляем все записи для указанной даты
+            query = f"""
+            UPDATE {table}
+            SET pipeline = %s
+            WHERE DATE("{db_date_column}") = DATE(%s)
+            """
+            cur.execute(query, (pipeline_value, date_value))
+        
         rows_affected = cur.rowcount
         logger.info(f"Выполнен UPDATE в таблице {table}: {rows_affected} строк обновлено")
         
