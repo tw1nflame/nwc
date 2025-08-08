@@ -233,24 +233,28 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, 
         cur = conn.cursor()
         
         # Обновляем pipeline для записей по дате и статьям
+        # Преобразуем дату в последний день месяца для сравнения
+        last_day_of_month = pd.to_datetime(date_value) + pd.offsets.MonthEnd(0)
+        last_day_date = last_day_of_month.date()
+        
         if articles_processed:
-            # Если указаны конкретные статьи, обновляем только их для указанной даты
+            # Если указаны конкретные статьи, обновляем только их для последнего дня месяца
             placeholders = ','.join(['%s'] * len(articles_processed))
             query = f"""
             UPDATE {table}
             SET pipeline = %s
-            WHERE DATE("{db_date_column}") = DATE(%s)
+            WHERE DATE("{db_date_column}") = %s
             AND article IN ({placeholders})
             """
-            cur.execute(query, [pipeline_value, date_value] + articles_processed)
+            cur.execute(query, [pipeline_value, last_day_date] + articles_processed)
         else:
-            # Обновляем все записи для указанной даты
+            # Обновляем все записи для последнего дня месяца
             query = f"""
             UPDATE {table}
             SET pipeline = %s
-            WHERE DATE("{db_date_column}") = DATE(%s)
+            WHERE DATE("{db_date_column}") = %s
             """
-            cur.execute(query, (pipeline_value, date_value))
+            cur.execute(query, (pipeline_value, last_day_date))
         
         rows_affected = cur.rowcount
         logger.info(f"Выполнен UPDATE в таблице {table}: {rows_affected} строк обновлено")
@@ -366,10 +370,8 @@ def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', da
         # Создаем таблицу курсов заново
         create_table_sql = f"""
         CREATE TABLE {EXCHANGE_RATE_TABLE} (
-            id SERIAL PRIMARY KEY,
-            date DATE NOT NULL UNIQUE,
-            exchange_rate DOUBLE PRECISION NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            date DATE NOT NULL PRIMARY KEY,
+            exchange_rate DOUBLE PRECISION NOT NULL
         );
         """
         cur.execute(create_table_sql)
@@ -437,17 +439,16 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
     
     logger.info(f"Все обязательные столбцы присутствуют: {required_columns}")
     
-    # Формируем дату из года и месяца (последний день месяца)
-    df_adjustments['Дата'] = pd.to_datetime(
-        df_adjustments['Год'].astype(str) + '-' + 
-        df_adjustments['Месяц'].astype(str).str.zfill(2) + '-01'
-    ) + pd.offsets.MonthEnd(0)
+    # Проверяем наличие дополнительных столбцов
+    optional_columns = ['Тип', 'Описание']
+    for col in optional_columns:
+        if col not in df_adjustments.columns:
+            df_adjustments[col] = None  # Добавляем пустой столбец если отсутствует
+            logger.info(f"Добавлен пустой столбец '{col}'")
     
-    # Группируем корректировки по дате и статье, суммируем значения
-    adjustments_grouped = df_adjustments.groupby(['Дата', 'Статья'])['Корректировка, руб'].sum().reset_index()
-    
-    # Преобразуем дату в формат для БД
-    adjustments_grouped['Дата'] = adjustments_grouped['Дата'].dt.date
+    # Очищаем данные от пустых строк
+    df_adjustments = df_adjustments.dropna(subset=['Статья', 'Год', 'Месяц', 'Корректировка, руб'])
+    logger.info(f"После очистки от пустых строк: {len(df_adjustments)} записей")
     
     conn = psycopg2.connect(
         host=DB_HOST,
@@ -468,11 +469,13 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
         # Создаем таблицу корректировок заново
         create_table_sql = f"""
         CREATE TABLE {ADJUSTMENTS_TABLE} (
-            id SERIAL PRIMARY KEY,
-            "date" DATE NOT NULL,
             "article" TEXT NOT NULL,
-            adjustment_value DOUBLE PRECISION NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            "year" INTEGER NOT NULL,
+            "month" INTEGER NOT NULL,
+            "adjustment_value" DOUBLE PRECISION NOT NULL,
+            "type" TEXT,
+            "description" TEXT,
+            PRIMARY KEY ("article", "year", "month")
         );
         """
         cur.execute(create_table_sql)
@@ -480,16 +483,24 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
         
         # Вставляем корректировки в таблицу
         inserted_adjustments = 0
-        for _, row in adjustments_grouped.iterrows():
-            adjustment_value = row['Корректировка, руб']
-            date_value = row['Дата']
-            article_value = row['Статья']
+        for _, row in df_adjustments.iterrows():
+            article = row['Статья']
+            year = int(row['Год'])
+            month = int(row['Месяц'])
+            adjustment_value = float(row['Корректировка, руб'])
+            adjustment_type = row.get('Тип')
+            description = row.get('Описание')
             
             insert_query = f"""
-            INSERT INTO {ADJUSTMENTS_TABLE} ("date", "article", adjustment_value)
-            VALUES (%s, %s, %s)
+            INSERT INTO {ADJUSTMENTS_TABLE} ("article", "year", "month", "adjustment_value", "type", "description")
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("article", "year", "month") 
+            DO UPDATE SET 
+                "adjustment_value" = EXCLUDED."adjustment_value",
+                "type" = EXCLUDED."type",
+                "description" = EXCLUDED."description"
             """
-            cur.execute(insert_query, (date_value, article_value, adjustment_value))
+            cur.execute(insert_query, (article, year, month, adjustment_value, adjustment_type, description))
             inserted_adjustments += 1
         
         logger.info(f"Вставлено {inserted_adjustments} корректировок в таблицу {ADJUSTMENTS_TABLE}")
@@ -500,8 +511,8 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
         
         return {
             "status": "success", 
-            "processed_adjustments": len(adjustments_grouped),
-            "message": f"Обработано {len(adjustments_grouped)} корректировок в отдельной таблице"
+            "processed_adjustments": len(df_adjustments),
+            "message": f"Обработано {len(df_adjustments)} корректировок в отдельной таблице"
         }
         
     except Exception as e:
@@ -547,19 +558,26 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                 
                 # Получаем корректировки из отдельной таблицы
                 try:
-                    df_adjustments = pd.read_sql_query(f'SELECT "date", "article", adjustment_value FROM {ADJUSTMENTS_TABLE}', conn)
+                    df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
                     logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
+                    
+                    # Создаем дату из года и месяца для объединения
+                    df_adjustments['date'] = pd.to_datetime(
+                        df_adjustments['year'].astype(str) + '-' + 
+                        df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                    ) + pd.offsets.MonthEnd(0)
+                    df_adjustments['date'] = df_adjustments['date'].dt.date
                     
                     # Объединяем данные с корректировками
                     df_data = df_data.merge(
-                        df_adjustments, 
+                        df_adjustments[['date', 'article', 'adjustment_value']], 
                         left_on=['date', 'article'], 
                         right_on=['date', 'article'], 
                         how='left'
                     )
                     # Заполняем пропуски нулями для корректировок
                     df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
-                    logger.info(f"Данные объединены с корректировками: {len(df_data)} строк")
+                    logger.info(f"Данные объединены с корректировками: {len(df_data)} строк, корректировок с ненулевыми значениями: {(df_data['adjustment_value'] != 0).sum()}")
                 except Exception as adj_error:
                     logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
                     # Если таблица корректировок не существует, добавляем нулевые корректировки
