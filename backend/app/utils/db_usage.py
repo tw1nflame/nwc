@@ -26,7 +26,6 @@ DB_NAME = os.getenv('DB_NAME')
 DATA_TABLE = os.getenv('DATA_TABLE')
 ADJUSTMENTS_TABLE = os.getenv('ADJUSTMENTS_TABLE')
 EXCHANGE_RATE_TABLE = os.getenv('EXCHANGE_RATE_TABLE')
-EXCHANGE_RATE_FILE_PATH = os.getenv('EXCHANGE_RATE_FILE_PATH')
 COEFFS_WITH_INTERCEPT_TABLE = os.getenv('COEFFS_WITH_INTERCEPT_TABLE')
 COEFFS_NO_INTERCEPT_TABLE = os.getenv('COEFFS_NO_INTERCEPT_TABLE')
 ENSEMBLE_INFO_TABLE = os.getenv('ENSEMBLE_INFO_TABLE')
@@ -271,7 +270,7 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, 
 
 from io import BytesIO
 
-def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', date_column: str = 'Дата'):
+def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', date_column: str = 'Дата', sheet_name: str = None):
     """
     Обрабатывает файл с курсами валют и сохраняет их в таблицу EXCHANGE_RATE_TABLE.
     Полностью дропает таблицу и создает заново при каждой загрузке.
@@ -280,6 +279,7 @@ def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', da
         file_path: путь к Excel файлу с курсами валют
         rate_column: название столбца с курсом (по умолчанию 'Курс')
         date_column: название столбца с датой (по умолчанию 'Дата')
+        sheet_name: название листа Excel (если None, берется первый лист)
     
     Returns:
         dict: результат операции с количеством обработанных записей
@@ -287,8 +287,12 @@ def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', da
     logger.info(f"Начало обработки файла курсов валют: {file_path}")
     
     # Читаем Excel файл
-    df = pd.read_excel(file_path)
-    logger.info(f"Загружен Excel файл с курсами: {df.shape} (строки x колонки)")
+    if sheet_name:
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        logger.info(f"Загружен лист '{sheet_name}' из Excel файла: {df.shape} (строки x колонки)")
+    else:
+        df = pd.read_excel(file_path)
+        logger.info(f"Загружен Excel файл с курсами: {df.shape} (строки x колонки)")
     
     # Транспонируем DataFrame (аналогично datahandler.py)
     df = (
@@ -299,19 +303,26 @@ def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', da
         .reset_index(drop=True)
     )
     logger.info(f"DataFrame после транспонирования: {df.shape}")
+    logger.info(f"Колонки после транспонирования: {list(df.columns)}")
     
     # Проверяем наличие нужных колонок
     if rate_column not in df.columns:
-        raise ValueError(f"Колонка '{rate_column}' не найдена в файле")
+        available_columns = list(df.columns)
+        logger.error(f"Колонка '{rate_column}' не найдена. Доступные колонки: {available_columns}")
+        raise ValueError(f"Колонка '{rate_column}' не найдена в файле. Доступные: {available_columns}")
     if date_column not in df.columns:
-        raise ValueError(f"Колонка '{date_column}' не найдена в файле")
+        available_columns = list(df.columns)
+        logger.error(f"Колонка '{date_column}' не найдена. Доступные колонки: {available_columns}")
+        raise ValueError(f"Колонка '{date_column}' не найдена в файле. Доступные: {available_columns}")
     
     # Оставляем только нужные колонки
     exchange_data = df[[date_column, rate_column]].copy()
     logger.info(f"Выбраны колонки для курса: {list(exchange_data.columns)}")
+    logger.info(f"Первые 3 строки данных курса:")
+    logger.info(f"{exchange_data.head(3).to_string()}")
     
     # Преобразуем типы данных
-    exchange_data[date_column] = pd.to_datetime(exchange_data[date_column])
+    exchange_data[date_column] = pd.to_datetime(exchange_data[date_column], errors='coerce')
     exchange_data[rate_column] = pd.to_numeric(exchange_data[rate_column], errors='coerce')
     
     # Удаляем строки с некорректными данными
