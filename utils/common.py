@@ -32,6 +32,10 @@ def catch_errors(func):
 def setup_custom_logging(log_file="log.txt"):
     """Настройка логирования в файл и в консоль."""
     
+    # Создаем директорию для логов, если она не существует
+    log_dir = os.path.dirname(log_file) if os.path.dirname(log_file) else '.'
+    os.makedirs(log_dir, exist_ok=True)
+    
     # Очищаем все предыдущие обработчики у корневого логгера
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:

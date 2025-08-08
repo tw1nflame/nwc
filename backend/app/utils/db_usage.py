@@ -1,11 +1,21 @@
 import os
 import pandas as pd
 import psycopg2
+import logging
 from dotenv import load_dotenv
 from utils.column_mapping import REVERSE_COLUMN_MAPPING, COLUMN_MAPPING
 from utils.config import load_config
+from utils.common import setup_custom_logging
 
 load_dotenv()
+
+# Создаем директорию для логов
+log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Инициализируем логгер
+setup_custom_logging(os.path.join(log_dir, "db_operations.log"))
+logger = logging.getLogger(__name__)
 
 DB_HOST = os.getenv('DB_HOST')
 DB_PORT = int(os.getenv('DB_PORT', 5432))
@@ -14,6 +24,7 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
 
 DATA_TABLE = os.getenv('DATA_TABLE')
+ADJUSTMENTS_TABLE = os.getenv('ADJUSTMENTS_TABLE')
 COEFFS_WITH_INTERCEPT_TABLE = os.getenv('COEFFS_WITH_INTERCEPT_TABLE')
 COEFFS_NO_INTERCEPT_TABLE = os.getenv('COEFFS_NO_INTERCEPT_TABLE')
 ENSEMBLE_INFO_TABLE = os.getenv('ENSEMBLE_INFO_TABLE')
@@ -44,7 +55,12 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
         date_value: дата для удаления данных из отсутствующих листов (формат 'YYYY-MM-DD')
         date_column: имя столбца с датой в Excel (например, 'Дата'), будет преобразовано в имя столбца БД
     """
+    logger.info(f"Начало загрузки результатов пайплайна в БД из файла: {file_path}")
+    logger.info(f"Параметры: date_value={date_value}, date_column={date_column}")
+    
     xls = pd.read_excel(file_path, sheet_name=None)
+    logger.info(f"Загружены листы Excel: {list(xls.keys())}")
+    
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -52,69 +68,119 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
+    logger.info(f"Подключение к БД установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    
     try:
         cur = conn.cursor()
-        # Очищаем только те таблицы, для которых есть соответствующие листы в Excel
+        
+        # Получаем список статей, которые были обработаны (из листа 'data')
+        processed_articles = []
+        if 'data' in xls and not xls['data'].empty:
+            # Применяем маппинг к колонкам для определения статей
+            data_df = xls['data'].copy()
+            data_df.columns = [COLUMN_MAPPING.get(col, col) for col in data_df.columns]
+            if 'article' in data_df.columns:
+                processed_articles = data_df['article'].unique().tolist()
+                logger.info(f"Обработанные статьи: {processed_articles}")
+            else:
+                logger.warning("Колонка 'article' не найдена в данных после применения маппинга")
+        else:
+            logger.warning("Лист 'data' отсутствует или пуст")
+        
+        # Селективно удаляем данные только по обработанным статьям
+        deleted_rows_total = 0
         for sheet, df in xls.items():
             table = sheet_to_table.get(sheet)
-            if table:
-                if table == DATA_TABLE:
-                    # Для основной таблицы сохраняем корректировки перед очисткой
-                    cur.execute(f'CREATE TEMP TABLE temp_adjustments AS SELECT "дата", "статья", adjustments FROM {table} WHERE adjustments IS NOT NULL AND adjustments != 0')
-                cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
-        # Загружаем данные из Excel
+            if table and processed_articles:
+                # Проверяем, есть ли в таблице колонка article
+                cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = 'article'")
+                if cur.fetchone():
+                    # Удаляем данные только по обработанным статьям
+                    placeholders = ', '.join(['%s'] * len(processed_articles))
+                    delete_query = f'DELETE FROM {table} WHERE "article" IN ({placeholders})'
+                    cur.execute(delete_query, processed_articles)
+                    deleted_rows = cur.rowcount
+                    deleted_rows_total += deleted_rows
+                    logger.info(f"Удалено {deleted_rows} строк из таблицы {table} для статей: {processed_articles}")
+                else:
+                    # Если нет колонки article, очищаем всю таблицу (для совместимости)
+                    cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
+                    logger.info(f"Таблица {table} полностью очищена (нет колонки article)")
+            elif table:
+                logger.info(f"Таблица {table} пропущена (нет обработанных статей)")
+                
+        logger.info(f"Всего удалено строк: {deleted_rows_total}")
+        
+        # Загружаем новые данные из Excel
+        inserted_rows_total = 0
         for sheet, df in xls.items():
             table = sheet_to_table.get(sheet)
             if table is None:
+                logger.warning(f"Лист '{sheet}' не найден в маппинге таблиц")
                 continue
             if df.empty:
+                logger.warning(f"Лист '{sheet}' пуст")
                 continue
-            df.columns = [c.lower() for c in df.columns]
             
-            # Для основной таблицы добавляем столбец adjustments если его нет
-            if table == DATA_TABLE and 'adjustments' not in df.columns:
-                df['adjustments'] = 0
+            logger.info(f"Обработка листа '{sheet}' -> таблица '{table}', строк: {len(df)}")
             
-            columns = ', '.join(df.columns)
+            # Применяем маппинг колонок из Excel в БД
+            original_columns = df.columns.tolist()
+            df.columns = [COLUMN_MAPPING.get(col, col) for col in df.columns]
+            mapped_columns = df.columns.tolist()
+            logger.debug(f"Маппинг колонок для {sheet}: {dict(zip(original_columns, mapped_columns))}")
+            
+            columns = ', '.join([f'"{col}"' for col in df.columns])
             values_template = ', '.join(['%s'] * len(df.columns))
             insert_query = f'INSERT INTO {table} ({columns}) VALUES ({values_template})'
-            records = df.values.tolist()
-            for row in records:
-                cur.execute(insert_query, row)
             
-            # После загрузки основной таблицы восстанавливаем корректировки
-            if table == DATA_TABLE:
+            records = df.values.tolist()
+            inserted_rows = 0
+            for i, row in enumerate(records):
                 try:
-                    cur.execute(f'''
-                        UPDATE {table} 
-                        SET adjustments = temp_adjustments.adjustments 
-                        FROM temp_adjustments 
-                        WHERE {table}."дата" = temp_adjustments."дата" 
-                        AND {table}."статья" = temp_adjustments."статья"
-                    ''')
-                    cur.execute('DROP TABLE IF EXISTS temp_adjustments')
-                except:
-                    # Игнорируем ошибки если временная таблица не создана
-                    pass
+                    cur.execute(insert_query, row)
+                    inserted_rows += 1
+                except Exception as e:
+                    logger.error(f"Ошибка вставки строки {i+1} в таблицу {table}: {e}")
+                    logger.error(f"Данные строки: {row}")
+                    raise
+            
+            inserted_rows_total += inserted_rows
+            logger.info(f"Вставлено {inserted_rows} строк в таблицу {table}")
+        
+        logger.info(f"Всего вставлено строк: {inserted_rows_total}")
+        conn.commit()
+        logger.info("Транзакция успешно завершена")
         
         # Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют,
         # удаляем данные по указанной дате из соответствующих таблиц
         if date_value and date_column:
             # Преобразуем имя столбца из Excel в имя столбца БД
-            db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+            db_date_column = COLUMN_MAPPING.get(date_column, date_column)
             tabular_sheets_to_check = ['Tabular_ensemble_models_info', 'Tabular_feature_importance']
             for sheet_name in tabular_sheets_to_check:
                 if sheet_name not in xls:  # Лист отсутствует в Excel
                     table = sheet_to_table.get(sheet_name)
                     if table:
                         # Удаляем данные по дате из таблицы, используя правильное имя столбца БД
-                        delete_query = f'DELETE FROM {table} WHERE {db_date_column} = %s'
-                        cur.execute(delete_query, (date_value,))
+                        delete_by_date_query = f'DELETE FROM {table} WHERE "{db_date_column}" = %s'
+                        cur.execute(delete_by_date_query, (date_value,))
+                        deleted_by_date = cur.rowcount
+                        logger.info(f"Удалено {deleted_by_date} строк из таблицы {table} по дате {date_value}")
+            conn.commit()
+            logger.info("Дополнительная очистка по дате завершена")
         
-        conn.commit()
         cur.close()
+        logger.info("Загрузка результатов пайплайна в БД завершена успешно")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке данных в БД: {e}", exc_info=True)
+        conn.rollback()
+        logger.info("Транзакция отменена")
+        raise e
     finally:
         conn.close()
+        logger.info("Соединение с БД закрыто")
 
 def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
     """
@@ -123,9 +189,13 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
     date_value: значение даты (строка в формате 'YYYY-MM-DD')
     pipeline_value: 'BASE' или 'BASE+'
     """
+    logger = setup_custom_logging()
+    logger.info(f"Установка pipeline колонки: {date_column}={date_value} -> {pipeline_value}")
+    
     table = DATA_TABLE
     # Преобразуем имя столбца из Excel в имя столбца БД
-    db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+    db_date_column = COLUMN_MAPPING.get(date_column, date_column)
+    logger.info(f"Маппинг колонки: {date_column} -> {db_date_column}")
     
     conn = psycopg2.connect(
         host=DB_HOST,
@@ -134,38 +204,58 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str):
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
+    logger.info(f"Подключение к БД для установки pipeline: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    
     try:
         cur = conn.cursor()
         query = f"""
         UPDATE {table}
         SET pipeline = %s
-        WHERE {db_date_column} = %s
+        WHERE "{db_date_column}" = %s
         """
+        
         cur.execute(query, (pipeline_value, date_value))
+        rows_affected = cur.rowcount
+        logger.info(f"Выполнен UPDATE в таблице {table}: {rows_affected} строк обновлено")
+        
         conn.commit()
+        logger.info("Изменения pipeline зафиксированы в БД")
         cur.close()
+        
+    except Exception as e:
+        logger.error(f"Ошибка при установке pipeline колонки: {e}", exc_info=True)
+        conn.rollback()
+        logger.info("Транзакция отменена")
+        raise e
     finally:
         conn.close()
+        logger.info("Соединение с БД для pipeline закрыто")
 
 from io import BytesIO
 
 def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
     """
-    Обрабатывает файл корректировок и обновляет столбец adjustments в DATA_TABLE.
-    Полностью перезаписывает все корректировки.
+    Обрабатывает файл корректировок и сохраняет их в отдельную таблицу ADJUSTMENTS_TABLE.
+    Полностью дропает таблицу и создает заново при каждой загрузке.
     
     Args:
         file_path: путь к Excel файлу с корректировками
         date_column: имя столбца с датой в Excel (например, 'Дата')
     """
+    logger.info(f"Начало обработки файла корректировок: {file_path}")
+    
     # Читаем файл корректировок
     df_adjustments = pd.read_excel(file_path, sheet_name='Корректировки')
+    logger.info(f"Загружен лист 'Корректировки', строк: {len(df_adjustments)}")
     
     # Проверяем обязательные столбцы
     required_columns = ['Статья', 'Год', 'Месяц', 'Корректировка, руб']
     missing_columns = [col for col in required_columns if col not in df_adjustments.columns]
     if missing_columns:
+        logger.error(f"Отсутствуют обязательные столбцы: {missing_columns}")
         raise ValueError(f"Отсутствуют обязательные столбцы в файле корректировок: {missing_columns}")
+    
+    logger.info(f"Все обязательные столбцы присутствуют: {required_columns}")
     
     # Формируем дату из года и месяца (последний день месяца)
     df_adjustments['Дата'] = pd.to_datetime(
@@ -186,48 +276,70 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
+    logger.info(f"Подключение к БД для корректировок установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
     
     try:
         cur = conn.cursor()
         
-        # Преобразуем имя столбца даты из Excel в имя столбца БД
-        db_date_column = COLUMN_MAPPING.get(date_column, date_column.lower())
+        # Дропаем таблицу корректировок, если она существует
+        cur.execute(f'DROP TABLE IF EXISTS {ADJUSTMENTS_TABLE}')
+        logger.info(f"Таблица {ADJUSTMENTS_TABLE} удалена (если существовала)")
         
-        # Сначала обнуляем все корректировки
-        cur.execute(f'UPDATE {DATA_TABLE} SET adjustments = 0')
+        # Создаем таблицу корректировок заново
+        create_table_sql = f"""
+        CREATE TABLE {ADJUSTMENTS_TABLE} (
+            id SERIAL PRIMARY KEY,
+            "date" DATE NOT NULL,
+            "article" TEXT NOT NULL,
+            adjustment_value DOUBLE PRECISION NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        cur.execute(create_table_sql)
+        logger.info(f"Таблица {ADJUSTMENTS_TABLE} создана заново")
         
-        # Обновляем корректировки для каждой записи
+        # Вставляем корректировки в таблицу
+        inserted_adjustments = 0
         for _, row in adjustments_grouped.iterrows():
             adjustment_value = row['Корректировка, руб']
             date_value = row['Дата']
             article_value = row['Статья']
             
-            update_query = f"""
-            UPDATE {DATA_TABLE} 
-            SET adjustments = %s 
-            WHERE {db_date_column} = %s AND "статья" = %s
+            insert_query = f"""
+            INSERT INTO {ADJUSTMENTS_TABLE} ("date", "article", adjustment_value)
+            VALUES (%s, %s, %s)
             """
-            cur.execute(update_query, (adjustment_value, date_value, article_value))
+            cur.execute(insert_query, (date_value, article_value, adjustment_value))
+            inserted_adjustments += 1
         
+        logger.info(f"Вставлено {inserted_adjustments} корректировок в таблицу {ADJUSTMENTS_TABLE}")
         conn.commit()
+        logger.info("Корректировки успешно сохранены")
+        
         cur.close()
         
         return {
             "status": "success", 
             "processed_adjustments": len(adjustments_grouped),
-            "message": f"Обработано {len(adjustments_grouped)} корректировок"
+            "message": f"Обработано {len(adjustments_grouped)} корректировок в отдельной таблице"
         }
         
     except Exception as e:
+        logger.error(f"Ошибка при обработке корректировок: {e}", exc_info=True)
         conn.rollback()
+        logger.info("Транзакция корректировок отменена")
         raise e
     finally:
         conn.close()
+        logger.info("Соединение с БД для корректировок закрыто")
 
 def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
     """
     Экспортирует все таблицы из sheet_to_table в Excel-файл в памяти и возвращает BytesIO.
     """
+    logger = setup_custom_logging()
+    logger.info(f"Начало экспорта таблиц в Excel. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
+    
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -235,16 +347,51 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
+    logger.info(f"Подключение к БД для экспорта установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    
     output = BytesIO()
     config = load_config(CONFIG_PATH)
     model_article = config.get('model_article', {})
+    logger.info(f"Загружена конфигурация модели: {len(model_article)} статей")
     try:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            sheets_exported = 0
+            total_rows_exported = 0
+            
             if make_final_prediction:
+                logger.info("Создание финального предсказания")
+                
                 # Получаем данные из DATA_TABLE
                 df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
+                logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
+                
+                # Получаем корректировки из отдельной таблицы
+                try:
+                    df_adjustments = pd.read_sql_query(f'SELECT "date", "article", adjustment_value FROM {ADJUSTMENTS_TABLE}', conn)
+                    logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
+                    
+                    # Объединяем данные с корректировками
+                    df_data = df_data.merge(
+                        df_adjustments, 
+                        left_on=['date', 'article'], 
+                        right_on=['date', 'article'], 
+                        how='left'
+                    )
+                    # Заполняем пропуски нулями для корректировок
+                    df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
+                    logger.info(f"Данные объединены с корректировками: {len(df_data)} строк")
+                except Exception as adj_error:
+                    logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
+                    # Если таблица корректировок не существует, добавляем нулевые корректировки
+                    df_data['adjustment_value'] = 0
+                    logger.info("Добавлены нулевые корректировки")
+                
                 # Применяем маппинг к колонкам
+                original_columns = list(df_data.columns)
                 df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
+                mapped_columns = list(df_data.columns)
+                logger.info(f"Применено обратное маппинг колонок: {len(original_columns)} -> {len(mapped_columns)}")
+                
                 # Формируем финальный DataFrame
                 final_rows = []
                 for _, row in df_data.iterrows():
@@ -261,23 +408,70 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                             break
                     if not mapped_pred_col:
                         continue
+                    
+                    # Получаем значение корректировки
+                    adjustment = row.get('Корректировка, руб', 0) or 0
+                    
                     final_rows.append({
                         'Дата': row.get('Дата'),
                         'Статья': article,
                         'Fact': row.get('Fact'),
                         'Прогноз': row.get(mapped_pred_col),
+                        'Корректировка': adjustment,
                         'Модель': model_name
                     })
-                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Модель'])
+                    
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Модель'])
                 df_final.to_excel(writer, index=False, sheet_name='final_prediction')
+                sheets_exported += 1
+                total_rows_exported += len(df_final)
+                logger.info(f"Создан лист final_prediction: {len(df_final)} строк")
+                
             # Остальные листы
             for sheet, table in sheet_to_table.items():
                 if table is None:
+                    logger.warning(f"Пропуск листа {sheet}: таблица не указана")
                     continue
+                    
+                logger.info(f"Экспорт таблицы {table} в лист {sheet}")
                 df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
+                
+                original_columns = list(df.columns)
                 df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+                mapped_columns = list(df.columns)
+                
                 df.to_excel(writer, index=False, sheet_name=sheet)
+                sheets_exported += 1
+                total_rows_exported += len(df)
+                logger.info(f"Лист {sheet} экспортирован: {len(df)} строк, колонки: {len(original_columns)} -> {len(mapped_columns)}")
+            
+            # Добавляем лист с корректировками, если таблица существует
+            try:
+                df_adjustments = pd.read_sql_query(f'SELECT "date", "article", adjustment_value FROM {ADJUSTMENTS_TABLE}', conn)
+                if not df_adjustments.empty:
+                    logger.info(f"Экспорт корректировок: {len(df_adjustments)} строк")
+                    # Применяем маппинг к колонкам
+                    df_adjustments.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_adjustments.columns]
+                    df_adjustments.to_excel(writer, index=False, sheet_name='Корректировки')
+                    sheets_exported += 1
+                    total_rows_exported += len(df_adjustments)
+                    logger.info("Лист Корректировки добавлен")
+                else:
+                    logger.info("Таблица корректировок пуста, лист не добавлен")
+            except Exception as adj_error:
+                logger.warning(f"Не удалось экспортировать корректировки: {adj_error}")
+                # Таблица корректировок не существует или пуста
+                pass
+                
+            logger.info(f"Экспорт завершен: {sheets_exported} листов, {total_rows_exported} общих строк")
+        
         output.seek(0)
+        logger.info("Excel файл создан в памяти и готов к возврату")
         return output
+        
+    except Exception as e:
+        logger.error(f"Ошибка при экспорте таблиц в Excel: {e}", exc_info=True)
+        raise e
     finally:
         conn.close()
+        logger.info("Соединение с БД для экспорта закрыто")
