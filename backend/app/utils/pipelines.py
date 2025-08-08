@@ -539,7 +539,10 @@ def run_base_pipeline(
         # ----------------------------------
         # Предикт Chronos_base | BASE
         # ----------------------------------
-        chronos_model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'pretrained_models', 'chronos-bolt-base'))
+        # Используем относительный путь от корня проекта (как в рабочем примере)
+        chronos_model_path = "pretrained_models/chronos-bolt-base"
+        logger.warning(f"[DEBUG] Using Chronos model path: {chronos_model_path}")
+        
         df_predict, _ = generate_timeseries_predictions(
             df=df, 
             months_to_predict=[CHOSEN_MONTH], 
