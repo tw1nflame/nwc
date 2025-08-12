@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
-from utils.column_mapping import COLUMN_MAPPING
+from column_mapping import COLUMN_MAPPING
 import re
 
 load_dotenv()
@@ -30,7 +30,10 @@ SHEET_TO_TABLE = {
     'Tabular_feature_importance': BASEPLUS_FEATURE_IMPORTANCE_TABLE,
 }
 
-EXCEL_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'synthetic_base_pipeline_BASE.xlsx'))
+# Путь к синтетическому смешанному файлу (в корневой папке проекта в каталоге results)
+EXCEL_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '../../../results/synthetic_mixed_pipeline.xlsx')
+)
 
 # Загрузка всех листов Excel-файла
 xls = pd.read_excel(EXCEL_FILE, sheet_name=None)
@@ -52,8 +55,15 @@ try:
         if df.empty:
             print(f"Лист '{sheet}' пустой, пропущен.")
             continue
-        # Преобразуем названия столбцов через COLUMN_MAPPING
-        columns = [COLUMN_MAPPING.get(col, col) for col in df.columns]
+        # Нормализуем имена колонок и применяем COLUMN_MAPPING
+        normalized_cols = []
+        for col in df.columns:
+            col_str = str(col)
+            # Сжимаем повторные пробелы и приводим 'отклонение  %' → 'отклонение %'
+            col_str = re.sub(r"\s+", " ", col_str).strip()
+            col_str = col_str.replace("отклонение  %", "отклонение %")
+            normalized_cols.append(col_str)
+        columns = [COLUMN_MAPPING.get(col, col) for col in normalized_cols]
         df.columns = columns
         col_types = []
         for col in columns:
@@ -69,13 +79,31 @@ try:
             else:
                 sql_type = 'TEXT'
             col_types.append(f'"{col}" {sql_type}')
+        # Удаляем таблицу, если она уже есть, чтобы структура всегда соответствовала Excel
+        cur.execute(f'DROP TABLE IF EXISTS {table_name} CASCADE')
+        conn.commit()
         create_table_sql = f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
+        CREATE TABLE {table_name} (
             {', '.join(col_types)}
         );
         """
         cur.execute(create_table_sql)
         conn.commit()
+        # Полная очистка таблицы перед загрузкой
+        try:
+            cur.execute(f'TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE')
+            conn.commit()
+            print(f"Таблица {table_name} очищена (TRUNCATE RESTART IDENTITY CASCADE)")
+        except Exception as e:
+            # Если таблицы ещё не было или нет прав/ссылок — попытаемся обычный DELETE
+            conn.rollback()
+            try:
+                cur.execute(f'DELETE FROM {table_name}')
+                conn.commit()
+                print(f"Таблица {table_name} очищена (DELETE)")
+            except Exception as e2:
+                conn.rollback()
+                print(f"Не удалось очистить таблицу {table_name}: {e2}")
         columns_str = ', '.join([f'"{col}"' for col in columns])
         values_template = ', '.join(['%s'] * len(columns))
         insert_sql = f'INSERT INTO {table_name} ({columns_str}) VALUES ({values_template})'

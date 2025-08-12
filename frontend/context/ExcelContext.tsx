@@ -11,6 +11,10 @@ export type ExcelContextType = {
   setArticles: (articles: string[]) => void
   parsedJson: any[]
   setParsedJson: (json: any[]) => void
+  finalPredictionJson: any[]
+  setFinalPredictionJson: (json: any[]) => void
+  exchangeRatesJson: any[]
+  setExchangeRatesJson: (json: any[]) => void
   // Добавляем сохранение состояния анализа
   selectedArticle: string
   setSelectedArticle: (article: string) => void
@@ -31,6 +35,8 @@ export function ExcelProvider({ children }: { children: React.ReactNode }) {
   const [models, setModels] = useState<string[]>([])
   const [articles, setArticles] = useState<string[]>([])
   const [parsedJson, setParsedJson] = useState<any[]>([])
+  const [finalPredictionJson, setFinalPredictionJson] = useState<any[]>([])
+  const [exchangeRatesJson, setExchangeRatesJson] = useState<any[]>([])
   // Добавляем состояние для анализа
   const [selectedArticle, setSelectedArticle] = useState<string>("")
   const [selectedModels, setSelectedModels] = useState<string[]>([])
@@ -41,6 +47,8 @@ export function ExcelProvider({ children }: { children: React.ReactNode }) {
       models, setModels, 
       articles, setArticles, 
       parsedJson, setParsedJson,
+      finalPredictionJson, setFinalPredictionJson,
+  exchangeRatesJson, setExchangeRatesJson,
       selectedArticle, setSelectedArticle,
       selectedModels, setSelectedModels
     }}>

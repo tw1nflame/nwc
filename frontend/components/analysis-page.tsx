@@ -1,5 +1,7 @@
 "use client"
-
+import { AnalysisGraphs } from "./analyze/graphs";
+import { ArticleDataTable } from "./analyze/ArticleDataTable";
+import { ArticleStatsTable } from "./ArticleStatsTable";
 import React, { useState } from "react"
 import { useExcelContext } from "../context/ExcelContext"
 import { motion } from "framer-motion"
@@ -201,6 +203,10 @@ export function AnalysisPage() {
     setArticles,
     parsedJson,
     setParsedJson,
+  finalPredictionJson,
+  setFinalPredictionJson,
+    exchangeRatesJson,
+    setExchangeRatesJson,
     // Используем состояние из контекста
     selectedArticle,
     setSelectedArticle,
@@ -256,8 +262,8 @@ export function AnalysisPage() {
     async function fetchData() {
       setLoading(true);
       try {
-        // Если данные уже есть в контексте, не загружаем заново
-        if (excelBuffer && models.length > 0 && articles.length > 0 && parsedJson.length > 0) {
+    // Если данные уже есть в контексте, не загружаем заново
+  if (excelBuffer && models.length > 0 && articles.length > 0 && parsedJson.length > 0 && finalPredictionJson && finalPredictionJson.length > 0 && exchangeRatesJson && exchangeRatesJson.length > 0) {
           // Если статья еще не выбрана, выбираем первую
           if (!selectedArticle && articles.length > 0) {
             setSelectedArticle(articles[0]);
@@ -286,14 +292,24 @@ export function AnalysisPage() {
         }
         // Не устанавливаем модели здесь - это будет делать useEffect с главной моделью
         // Кэшируем распаршенный json
-        const workbook = XLSX.read(arrayBuffer, { type: "array" });
-        const sheet = workbook.Sheets["data"] || workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet);
-        setParsedJson(json);
+  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  const sheet = workbook.Sheets["data"] || workbook.Sheets[workbook.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(sheet);
+  setParsedJson(json);
+  // читаем лист final_prediction для корректировок
+  const finalSheet = workbook.Sheets["final_prediction"];
+  const finalJson = finalSheet ? XLSX.utils.sheet_to_json(finalSheet) : [];
+  setFinalPredictionJson(finalJson as any[]);
+  // читаем лист с курсами валют
+  const ratesSheet = workbook.Sheets["Курсы валют"];
+  const ratesJson = ratesSheet ? XLSX.utils.sheet_to_json(ratesSheet) : [];
+  setExchangeRatesJson(ratesJson as any[]);
       } catch (err) {
         setArticles([]);
         setModels([]);
-        setParsedJson([]);
+  setParsedJson([]);
+  setFinalPredictionJson([]);
+  setExchangeRatesJson([]);
       }
       setLoading(false);
     }
@@ -304,65 +320,94 @@ export function AnalysisPage() {
     if (!selectedArticle || !selectedModels.length || !parsedJson || !parsedJson.length) return;
     setChartLoading(true);
     try {
-      // Для "Торговая дз" ищем в обеих формах: с "_USD" и без
+      const usdArticles = config?.["Статьи для предикта в USD"] || [];
+      const selectedArticleLower = selectedArticle.trim().toLowerCase();
+      const isUsdArticle = usdArticles.map((a: string) => a.trim().toLowerCase()).includes(selectedArticleLower);
+
       const filtered = parsedJson.filter((row: any) => {
         const val = row["Статья"];
         if (!val) return false;
-        
         const rowArticleName = val.trim().toLowerCase();
-        const selectedArticleLower = selectedArticle.trim().toLowerCase();
-        
-        if (selectedArticleLower === 'торговая дз') {
-          // Для "Торговая дз" проверяем оба варианта
-          return rowArticleName === 'торговая дз' || rowArticleName === 'торговая дз_usd';
+        if (isUsdArticle) {
+          return rowArticleName === selectedArticleLower || rowArticleName === selectedArticleLower + '_usd';
         } else {
-          // Для остальных статей - точное совпадение
           return rowArticleName === selectedArticleLower;
         }
       });
-      
-      // Для каждой модели — свой массив данных
+
+      const toDateKey = (d: any) => (typeof d === 'number' ? excelSerialToDate(d) : (typeof d === 'string' ? d.slice(0, 10) : d));
+      const ratesIndex = new Map<string, number>();
+      if (Array.isArray(exchangeRatesJson)) {
+        for (const r of exchangeRatesJson as any[]) {
+          const dk = toDateKey(r["Дата"] ?? r["date"] ?? r["Date"]);
+          if (!dk) continue;
+          const rateVal = Number(r["Курс"] ?? r["rate"] ?? r["Rate"] ?? r["exchange_rate"]);
+          if (isFinite(rateVal) && rateVal > 0) ratesIndex.set(dk, rateVal);
+        }
+      }
+      const ratesList = Array.from(ratesIndex.values());
+      const avgRate = ratesList.length ? (ratesList.reduce((a, b) => a + b, 0) / ratesList.length) : 1;
+      const resolveRate = (dk?: string | null) => {
+        if (!dk) return avgRate;
+        const r = ratesIndex.get(dk);
+        if (!(r && isFinite(r) && r > 0)) return avgRate;
+        return r;
+      };
+      const convert = (value: number | null | undefined, from: 'RUB' | 'USD', to: 'RUB' | 'USD', rate?: number) => {
+        if (value === null || value === undefined) return value as any;
+        if (from === to) return value;
+        const r = rate && isFinite(rate) && rate > 0 ? rate : 1;
+        return from === 'RUB' ? value / r : value * r;
+      };
+      const getRowBaseCurrency = (rowArticleName: string): 'RUB' | 'USD' => {
+        const name = rowArticleName.trim().toLowerCase();
+        if (name.endsWith('_usd')) return 'USD';
+        return isUsdArticle ? 'USD' : 'RUB';
+      };
+
+      // Для отладки: вывести все ключи первой строки
+      if (filtered.length > 0) {
+        console.log('[ArticleDataTable] Ключи первой строки parsedJson:', Object.keys(filtered[0]));
+      }
       const allChartData = selectedModels.map(model => ({
         model,
         data: filtered.map((row: any) => {
-          const originalForecast = row[`predict_${model}`];
-          const adjustments = row["Корректировка, руб"] || 0;
-          
-          // Если выбран скорректированный прогноз, добавляем корректировку
-          const forecast = forecastType === 'corrected' 
-            ? (originalForecast || 0) + adjustments 
-            : originalForecast;
-          
-          // Пересчитываем ошибку и разность для скорректированного прогноза
-          const errorPercent = forecastType === 'corrected' && forecast && row["Fact"]
-            ? Number((((forecast - row["Fact"]) / row["Fact"]) * 100).toFixed(2))
-            : row[`predict_${model} отклонение  %`];
-          
-          const difference = forecastType === 'corrected' && forecast && row["Fact"]
-            ? forecast - row["Fact"]
-            : row[`predict_${model} разница`];
-          
+          const articleStr = (row["Статья"] ?? '').toString();
+          const baseCur = getRowBaseCurrency(articleStr);
+          const dk = toDateKey(row["Дата"]);
+          const rate = resolveRate(dk);
+
+          // Берём значения как есть из Excel
+          const fact = row["Fact"];
+          const forecast = row[`predict_${model}`];
+          const diff = row[`predict_${model} разница`];
+          // Для поиска поля 'отклонение  %' с пробелами, как в Excel
+          const errorKey = Object.keys(row).find(
+            k => k.trim().toLowerCase() === `predict_${model}`.trim().toLowerCase() + ' отклонение %'
+          );
+          const error = errorKey ? row[errorKey] : undefined;
+
+          // Конвертируем только числовые значения (не проценты)
+          const factConv = convert(fact, baseCur, currency, rate);
+          const forecastConv = convert(forecast, baseCur, currency, rate);
+          const diffConv = convert(diff, baseCur, currency, rate);
+
           return {
             date: row["Дата"],
-            actual: row["Fact"],
-            forecast: forecast,
-            originalForecast: originalForecast,
-            adjustments: adjustments,
-            // Берем готовые значения из Excel (обратите внимание на пробелы в названиях)
-            errorPercent: errorPercent,
-            difference: difference,
-            // Оставляем старый расчет как fallback для совместимости
-            error: errorPercent || (forecast && row["Fact"] ? Number((((forecast - row["Fact"]) / row["Fact"]) * 100).toFixed(2)) : null)
-          }
+            actual: factConv,
+            forecast: forecastConv,
+            difference: diffConv,
+            errorPercent: error, // проценты не конвертируем!
+          };
         })
       }));
-      
+
       setChartData(allChartData);
     } catch (err) {
       setChartData([]);
     }
     setTimeout(() => setChartLoading(false), 300);
-  }, [selectedArticle, selectedModels, parsedJson, forecastType]);
+  }, [selectedArticle, selectedModels, parsedJson, currency, exchangeRatesJson, config]);
 
   return (
     <main className="flex-1 p-8">
@@ -519,180 +564,77 @@ export function AnalysisPage() {
               <div className="text-center py-8 text-lg text-gray-500">Загрузка графиков...</div>
             ) : (
               <>
-                {/* Таблица данных по выбранной статье */}
+                <ArticleDataTable
+                  selectedArticle={selectedArticle}
+                  showFullTable={showFullTable}
+                  setShowFullTable={setShowFullTable}
+                  chartData={chartData}
+                  forecastType={forecastType}
+                  selectedModels={selectedModels}
+                  mainModelLower={mainModelLower}
+                  excelSerialToDate={excelSerialToDate}
+                />
+
+                {/* Агрегированная информация по статье */}
                 <Card className="shadow-lg border-gray-200 bg-white mb-8">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="flex items-center gap-2 text-gray-900">
                           <Table className="w-5 h-5 text-green-600" />
-                          Данные по статье: {selectedArticle}
+                          Агрегированная информация
                         </CardTitle>
                         <CardDescription>
-                          Детальные данные с отклонениями и разницей для всех выбранных моделей
+                          Статистические метрики по выбранной статье за все годы и периоды
                         </CardDescription>
                       </div>
                       <Button
                         variant="outline"
-                        onClick={() => setShowFullTable(!showFullTable)}
+                        onClick={async () => {
+                          if (!selectedArticle) return;
+                          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+                          const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
+                          try {
+                            const response = await fetch(url);
+                            if (!response.ok) throw new Error('Ошибка скачивания файла');
+                            const blob = await response.blob();
+                            const a = document.createElement('a');
+                            const currentDate = new Date().toISOString().split('T')[0];
+                            a.href = window.URL.createObjectURL(blob);
+                            a.download = `article_${selectedArticle}_${currentDate}.xlsx`;
+                            a.click();
+                            window.URL.revokeObjectURL(a.href);
+                          } catch (err) {
+                            alert('Ошибка скачивания файла');
+                          }
+                        }}
                         className="flex items-center gap-2"
                       >
-                        {showFullTable ? 'Свернуть' : `Показать все (${chartData.length > 0 ? chartData[0].data.length : 0})`}
-                        <motion.div
-                          animate={{ rotate: showFullTable ? 180 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <TrendingUp className="w-4 h-4" />
-                        </motion.div>
+                        Скачать Excel
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                      <div className="flex">
-                      {/* Фиксированные колонки: Дата и Факт */}
-                      <div className="flex-none">
-                        <table className="border-collapse text-sm">
-                          <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                              <th className="text-left py-3 px-3 font-semibold text-gray-900 border-r border-gray-300 min-w-[100px] h-[72px] align-middle">Дата</th>
-                              <th className="text-center py-3 px-3 font-semibold text-gray-900 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Факт</th>
-                              {forecastType === 'corrected' && (
-                                <th className="text-center py-3 px-3 font-semibold text-orange-700 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Корректировка</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {chartData.length > 0 && chartData[0].data
-                              .slice(0, showFullTable ? undefined : 10)
-                              .map((row: any, index: number) => (
-                              <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                <td className="py-3 px-3 font-medium text-gray-900 border-r border-gray-300">
-                                  {typeof row.date === 'number' ? excelSerialToDate(row.date) : row.date}
-                                </td>
-                                <td className="py-3 px-3 text-center font-medium text-gray-700 border-r border-gray-400">
-                                  {row.actual !== null && row.actual !== undefined ? Number(row.actual).toLocaleString() : '-'}
-                                </td>
-                                {forecastType === 'corrected' && (
-                                  <td className="py-3 px-3 text-center font-medium text-orange-700 border-r border-gray-400">
-                                    {row.adjustments !== null && row.adjustments !== undefined && row.adjustments !== 0 
-                                      ? Number(row.adjustments).toLocaleString() 
-                                      : '0'}
-                                  </td>
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>                      {/* Прокручиваемые колонки: данные моделей */}
-                      <div className="flex-1 overflow-x-auto">
-                        <table className="border-collapse text-sm w-full">
-                          <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                              {selectedModels.map((model, modelIndex) => (
-                                <React.Fragment key={model}>
-                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle ${modelIndex === 0 ? 'border-l-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '120px' }}>
-                                    {forecastType === 'corrected' ? 'Скорректированный' : 'Прогноз'} ({model})
-                                    {mainModelLower && model.toLowerCase() === mainModelLower && (
-                                      <span className="ml-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
-                                        целевая
-                                      </span>
-                                    )}
-                                  </th>
-                                  <th className="text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle" style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Отклонение %</th>
-                                  <th className={`text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '100px' }}>Разница</th>
-                                </React.Fragment>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {chartData.length > 0 && chartData[0].data
-                              .slice(0, showFullTable ? undefined : 10)
-                              .map((row: any, index: number) => (
-                              <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                {selectedModels.map((model, modelIndex) => {
-                                  const modelData = chartData.find(d => d.model === model);
-                                  const modelRow = modelData?.data[index];
-                                  const isMainModel = mainModelLower && model.toLowerCase() === mainModelLower;
-                                  
-                                  return (
-                                    <React.Fragment key={model}>
-                                      <td className={`py-3 px-3 text-center font-medium text-gray-700 ${modelIndex === 0 ? 'border-l-2 border-gray-500' : ''}`}>
-                                        {modelRow?.forecast !== null && modelRow?.forecast !== undefined ? Number(modelRow.forecast).toLocaleString() : '-'}
-                                      </td>
-                                      <td className={`py-3 px-3 text-center font-medium text-gray-700`}>
-                                        {modelRow?.errorPercent !== null && modelRow?.errorPercent !== undefined ? `${Number(modelRow.errorPercent).toFixed(2)}%` : '-'}
-                                      </td>
-                                      <td className={`py-3 px-3 text-center font-medium text-gray-700 ${modelIndex < selectedModels.length - 1 ? 'border-r-2 border-gray-500' : ''}`}>
-                                        {modelRow?.difference !== null && modelRow?.difference !== undefined ? Number(modelRow.difference).toLocaleString() : '-'}
-                                      </td>
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    {!showFullTable && chartData.length > 0 && chartData[0].data.length > 10 && (
-                      <div className="mt-4 text-center">
-                        <p className="text-sm text-gray-500 mb-3">
-                          Показано {Math.min(10, chartData[0].data.length)} из {chartData[0].data.length} записей
-                        </p>
-                        <Button
-                          variant="ghost"
-                          onClick={() => setShowFullTable(true)}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                          Показать все записи
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
+                  {/* Таблица статистики */}
+                  {selectedArticle && (
+                    <ArticleStatsTable
+                      article={selectedArticle}
+                      currency={currency}
+                      exchangeRatesJson={exchangeRatesJson}
+                      parsedJson={parsedJson}
+                      config={config}
+                    />
+                  )}
                 </Card>
 
-                <Card className="shadow-lg border-gray-200 bg-white mb-8">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-gray-900">
-                      <TrendingUp className="w-5 h-5 text-blue-600" />
-                      {forecastType === 'corrected' ? 'Скорректированный прогноз vs Факт' : 'Прогноз vs Факт'}
-                    </CardTitle>
-                    <CardDescription>
-                      Сравнение {forecastType === 'corrected' ? 'скорректированных (прогноз + корректировки)' : 'прогнозируемых'} и фактических значений по датам для {selectedArticle} и всех выбранных моделей
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ForecastChart data={chartData} mainModelLower={mainModelLower} forecastType={forecastType} />
-                  </CardContent>
-                </Card>
-                <Card className="shadow-lg border-gray-200 bg-white mb-8">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-gray-900">
-                      <AlertTriangle className="w-5 h-5 text-amber-600" />
-                      Ошибка %
-                    </CardTitle>
-                    <CardDescription>
-                      Ошибка {forecastType === 'corrected' ? 'скорректированного прогноза' : 'прогноза'} в процентах по датам для {selectedArticle} и всех выбранных моделей
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ErrorChart data={chartData} mainModelLower={mainModelLower} />
-                  </CardContent>
-                </Card>
-                <Card className="shadow-lg border-gray-200 bg-white mb-8">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-gray-900">
-                      <BarChart3 className="w-5 h-5 text-purple-600" />
-                      Разница
-                    </CardTitle>
-                    <CardDescription>
-                      Разница между {forecastType === 'corrected' ? 'скорректированным прогнозом' : 'прогнозом'} и фактом по датам для {selectedArticle} и всех выбранных моделей
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <AbsoluteDiffChart data={chartData} mainModelLower={mainModelLower} />
-                  </CardContent>
-                </Card>
+                <AnalysisGraphs
+                  chartData={chartData}
+                  mainModelLower={mainModelLower}
+                  forecastType={forecastType}
+                  selectedArticle={selectedArticle}
+                  ForecastChart={ForecastChart}
+                  ErrorChart={ErrorChart}
+                  AbsoluteDiffChart={AbsoluteDiffChart}
+                />
                 {/* Statistics Summary for all selected models */}
                 <Card className="shadow-lg border-gray-200 bg-white mb-8">
                   <CardHeader>

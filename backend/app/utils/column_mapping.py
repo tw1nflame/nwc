@@ -10,6 +10,7 @@ COLUMN_MAPPING = {
     'predict_PatchTST': 'predict_patchtst',
     'predict_Chronos_base': 'predict_chronos_base',
     'predict_TS_ML': 'predict_ts_ml',
+    'predict_TS_tabular': 'predict_ts_tabular',
     'predict_svm6': 'predict_svm6',
     'predict_svm9': 'predict_svm9',
     'predict_svm12': 'predict_svm12',
@@ -26,6 +27,7 @@ COLUMN_MAPPING = {
     'predict_PatchTST разница': 'predict_patchtst_diff',
     'predict_Chronos_base разница': 'predict_chronos_base_diff',
     'predict_TS_ML разница': 'predict_ts_ml_diff',
+    'predict_TS_tabular разница': 'predict_ts_tabular_diff',
     'predict_svm6 разница': 'predict_svm6_diff',
     'predict_svm9 разница': 'predict_svm9_diff',
     'predict_svm12 разница': 'predict_svm12_diff',
@@ -42,6 +44,7 @@ COLUMN_MAPPING = {
     'predict_PatchTST отклонение %': 'predict_patchtst_pct',
     'predict_Chronos_base отклонение %': 'predict_chronos_base_pct',
     'predict_TS_ML отклонение %': 'predict_ts_ml_pct',
+    'predict_TS_tabular отклонение %': 'predict_ts_tabular_pct',
     'predict_svm6 отклонение %': 'predict_svm6_pct',
     'predict_svm9 отклонение %': 'predict_svm9_pct',
     'predict_svm12 отклонение %': 'predict_svm12_pct',
@@ -56,6 +59,7 @@ COLUMN_MAPPING = {
     'pipeline': 'pipeline',
     # Для листа Tabular_ensemble_models_info
     'Ансамбль': 'ensemble',
+    'Factor': 'factor',
 
     # Для листа Tabular_feature_importance
     'feature': 'feature',
@@ -70,6 +74,10 @@ COLUMN_MAPPING = {
     # Для корректировок
     'Корректировка, руб': 'adjustment_value',
     'Описание': 'description',
+
+    # Для coeffs_* листов (дополнительные веса для BASE+)
+    'w_predict_ML_tabular': 'w_predict_ml_tabular',
+    'w_predict_TABPFNMIX': 'w_predict_tabpfnmix',
 }
 
 # Обратный маппинг: БД → Excel

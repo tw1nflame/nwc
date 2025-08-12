@@ -1,6 +1,9 @@
+import numpy as np
+from io import BytesIO
 import os
 import pandas as pd
 import psycopg2
+from sqlalchemy import create_engine
 import logging
 from dotenv import load_dotenv
 from utils.column_mapping import REVERSE_COLUMN_MAPPING, COLUMN_MAPPING
@@ -62,6 +65,9 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
     xls = pd.read_excel(file_path, sheet_name=None)
     logger.info(f"Загружены листы Excel: {list(xls.keys())}")
     
+    # Создаем SQLAlchemy engine для pandas
+    db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    engine = create_engine(db_url)
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -710,3 +716,324 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
     finally:
         conn.close()
         logger.info("Соединение с БД для экспорта закрыто")
+
+def get_article_stats_excel(article_name: str) -> BytesIO:
+    """
+    Вычисляет статистику по одной статье и возвращает Excel-файл в памяти.
+    """
+    try:
+        # Загружаем конфиг и проверяем, нужно ли добавлять _USD
+        config = load_config(CONFIG_PATH)
+        usd_articles = config.get('Статьи для предикта в USD', [])
+        article_name_db = article_name
+        if article_name in usd_articles:
+            article_name_db = f"{article_name}_USD"
+    # ...
+        # Создаем SQLAlchemy engine для pandas
+        db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        engine = create_engine(db_url)
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            dbname=DB_NAME
+        )
+    # ...
+        df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
+    # ...
+        if df.empty:
+            # ...
+            raise ValueError(f"Нет данных для статьи: {article_name}")
+        # ...existing code...
+        # (rest of the function remains unchanged)
+    except Exception as e:
+        import traceback
+        print(f"[get_article_stats_excel] EXCEPTION: {e}")
+        print(traceback.format_exc())
+        logger.error(f"[get_article_stats_excel] EXCEPTION: {e}", exc_info=True)
+        raise
+    df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+    exclude_cols = {'Дата', 'Статья', 'pipeline'}
+    value_cols = [col for col in df.columns if col not in exclude_cols]
+    df['Год'] = pd.to_datetime(df['Дата']).dt.year
+    periods = {
+        '2023': (2023, 2023),
+        '2024': (2024, 2024),
+        '2025': (2025, 2025),
+        '2024-2025': (2024, 2025),
+        'all': (df['Год'].min(), df['Год'].max()),
+    }
+    stats = [
+        ('Среднее отклонение по модулю за 2023 г. (ABS, %)', 'abs_mean', '2023'),
+        ('Среднее отклонение по модулю за 2024 г. (ABS, %)', 'abs_mean', '2024'),
+        ('Среднее отклонение по модулю за 2025 г. (ABS, %)', 'abs_mean', '2025'),
+        ('Среднее отклонение по модулю за период 2024-2025 (ABS, %)', 'abs_mean', '2024-2025'),
+        ('Среднее отклонение по модулю за весь период расчета (ABS, %)', 'abs_mean', 'all'),
+        ('Стандартное отклонение за 2023 г.', 'std', '2023'),
+        ('Стандартное отклонение за 2024 г.', 'std', '2024'),
+        ('Стандартное отклонение за 2025 г.', 'std', '2025'),
+        ('Стандартное отклонение за период 2024-2025', 'std', '2024-2025'),
+        ('Минимум 2024-2025', 'min', '2024-2025'),
+        ('Максимум 2024-2025', 'max', '2024-2025'),
+        ('Больше 5%, шт. за 2023', 'gt5', '2023'),
+        ('Больше 5%, шт. за 2024', 'gt5', '2024'),
+        ('Больше шт. за 2024-2025', 'gt5', '2024-2025'),
+    ]
+    pct_cols = [col for col in value_cols if 'отклонение %' in col]
+    monetary_cols = [col for col in value_cols if col not in pct_cols]
+    rates_df = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', engine)
+    if set(rates_df.columns) == {"date", "exchange_rate"}:
+        rates_df = rates_df.rename(columns={"date": "Дата", "exchange_rate": "Курс"})
+    rates_df['Дата'] = pd.to_datetime(rates_df['Дата'])
+    rates_df = rates_df.dropna(subset=['Дата', 'Курс'])
+    rates_df = rates_df[rates_df['Курс'] > 0]
+    rates_map = dict(zip(rates_df['Дата'].dt.date, rates_df['Курс']))
+    avg_rate = rates_df['Курс'].mean() if not rates_df.empty else 1.0
+    def resolve_rate(date):
+        d = pd.to_datetime(date).date()
+        return rates_map.get(d, avg_rate)
+    is_usd_article = article_name in usd_articles or article_name_db.endswith('_USD')
+    base_cur = 'USD' if is_usd_article else 'RUB'
+    target_cur = 'RUB' if is_usd_article else 'USD'
+    def convert(val, from_cur, to_cur, date):
+        if pd.isna(val):
+            return val
+        if from_cur == to_cur:
+            return val
+        rate = resolve_rate(date)
+        if from_cur == 'RUB' and to_cur == 'USD':
+            return val / rate
+        elif from_cur == 'USD' and to_cur == 'RUB':
+            return val * rate
+        return val
+    result = {}
+    for stat_name, stat_type, period_key in stats:
+        y1, y2 = periods[period_key]
+        period_df = df[(df['Год'] >= y1) & (df['Год'] <= y2)]
+        row = {}
+        # For percent columns: compute as before
+        for col in pct_cols:
+            if 'Дата' not in period_df.columns:
+                continue
+            try:
+                vals = period_df[[col, 'Дата']]
+            except Exception:
+                continue
+            vals = vals.dropna()
+            if vals.empty:
+                row[col] = np.nan
+                continue
+            if stat_type == 'abs_mean':
+                row[col] = np.mean(np.abs(vals[col]))
+            elif stat_type == 'std':
+                row[col] = np.std(vals[col])
+            elif stat_type == 'min':
+                row[col] = np.min(vals[col])
+            elif stat_type == 'max':
+                row[col] = np.max(vals[col])
+            elif stat_type == 'gt5':
+                row[col] = (np.abs(vals[col]) > 5).sum()
+        # For monetary columns: compute for both base and target currency
+        for col in monetary_cols:
+            if 'Дата' not in period_df.columns:
+                continue
+            try:
+                vals = period_df[[col, 'Дата']]
+            except Exception:
+                continue
+            vals = vals.dropna()
+            if vals.empty:
+                row[f"{col} ({base_cur})"] = np.nan
+                row[f"{col} ({target_cur})"] = np.nan
+                continue
+            # Compute for base currency
+            if stat_type == 'abs_mean':
+                row[f"{col} ({base_cur})"] = np.mean(np.abs(vals[col]))
+                # For target currency, convert each value
+                converted_vals = [convert(v, base_cur, target_cur, d) for v, d in zip(vals[col], vals['Дата'])]
+                row[f"{col} ({target_cur})"] = np.mean(np.abs(converted_vals))
+            elif stat_type == 'std':
+                row[f"{col} ({base_cur})"] = np.std(vals[col])
+                converted_vals = [convert(v, base_cur, target_cur, d) for v, d in zip(vals[col], vals['Дата'])]
+                row[f"{col} ({target_cur})"] = np.std(converted_vals)
+            elif stat_type == 'min':
+                row[f"{col} ({base_cur})"] = np.min(vals[col])
+                converted_vals = [convert(v, base_cur, target_cur, d) for v, d in zip(vals[col], vals['Дата'])]
+                row[f"{col} ({target_cur})"] = np.min(converted_vals)
+            elif stat_type == 'max':
+                row[f"{col} ({base_cur})"] = np.max(vals[col])
+                converted_vals = [convert(v, base_cur, target_cur, d) for v, d in zip(vals[col], vals['Дата'])]
+                row[f"{col} ({target_cur})"] = np.max(converted_vals)
+            elif stat_type == 'gt5':
+                row[f"{col} ({base_cur})"] = np.nan
+                row[f"{col} ({target_cur})"] = np.nan
+        result[stat_name] = row
+    stats_df = pd.DataFrame(result).T
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        stats_df.to_excel(writer, sheet_name='Статистика', index=True)
+    output.seek(0)
+    return output
+
+
+def export_article_with_agg_excel(article_name: str) -> BytesIO:
+    """
+    Возвращает Excel-файл с двумя таблицами:
+    1. Все строки по статье (дата, факт, все модели в RUB и USD)
+    2. Агрегированная таблица (метрика в первом столбце, далее значения по моделям)
+    Между ними — пустая строка.
+    """
+    config = load_config(CONFIG_PATH)
+    usd_articles = config.get('Статьи для предикта в USD', [])
+    article_name_db = article_name
+    if article_name in usd_articles:
+        article_name_db = f"{article_name}_USD"
+    db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    engine = create_engine(db_url)
+    # Основная таблица
+    df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
+    if df.empty:
+        raise ValueError(f"Нет данных для статьи: {article_name}")
+    df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+    # Курс
+    rates_df = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', engine)
+    if set(rates_df.columns) == {"date", "exchange_rate"}:
+        rates_df = rates_df.rename(columns={"date": "Дата", "exchange_rate": "Курс"})
+    rates_df['Дата'] = pd.to_datetime(rates_df['Дата'])
+    rates_df = rates_df.dropna(subset=['Дата', 'Курс'])
+    rates_df = rates_df[rates_df['Курс'] > 0]
+    rates_map = dict(zip(rates_df['Дата'].dt.date, rates_df['Курс']))
+    avg_rate = rates_df['Курс'].mean() if not rates_df.empty else 1.0
+    def resolve_rate(date):
+        d = pd.to_datetime(date).date()
+        return rates_map.get(d, avg_rate)
+    # Формируем таблицу: дата, факт (RUB, USD), все predict_* (RUB, USD)
+    out_rows = []
+    for _, row in df.iterrows():
+        date = row.get('Дата')
+        fact = row.get('Fact')
+        rate = resolve_rate(date)
+        fact_rub = fact if not (article_name in usd_articles or article_name_db.endswith('_USD')) else fact * rate
+        fact_usd = fact if (article_name in usd_articles or article_name_db.endswith('_USD')) else fact / rate
+        out_row = {
+            'Дата': date,
+            'Факт (RUB)': fact_rub,
+            'Факт (USD)': fact_usd,
+        }
+        # predict_* обработка: если есть %, сохраняем только оригинал; если нет %, сохраняем в RUB и USD
+        for col in df.columns:
+            if col.startswith('predict_'):
+                if '%' in col:
+                    out_row[col] = row.get(col)
+                else:
+                    val = row.get(col)
+                    out_row[f'{col} (RUB)'] = val if not (article_name in usd_articles or article_name_db.endswith('_USD')) else val * rate
+                    out_row[f'{col} (USD)'] = val if (article_name in usd_articles or article_name_db.endswith('_USD')) else val / rate
+        # остальные отклонения % (например, если есть не-predict_ колонки с %)
+        for col in df.columns:
+            if (
+                '%' in col
+                and col not in out_row
+                and '(RUB)' not in col
+                and '(USD)' not in col
+            ):
+                out_row[col] = row.get(col)
+        # добавляем курс доллара в конец
+        out_row['Курс доллара'] = rate
+        out_rows.append(out_row)
+    df_main = pd.DataFrame(out_rows)
+    # Получаем агрегированную таблицу через get_article_stats_excel
+    agg_excel = get_article_stats_excel(article_name)
+    agg_excel.seek(0)
+    with pd.ExcelFile(agg_excel) as xls:
+        stats_df = pd.read_excel(xls, sheet_name='Статистика', index_col=0)
+    # Итоговый Excel: сначала все данные, потом агрегированная инфа
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # данные
+        df_main.to_excel(writer, sheet_name='Статья+Агрегация', index=False, startrow=0)
+        # агрегация
+        startrow_agg = len(df_main) + 3
+        stats_df_for_write = stats_df.copy()
+        stats_df_for_write.insert(0, 'Дата', stats_df_for_write.index)
+        stats_df_for_write.reset_index(drop=True, inplace=True)
+        desired_columns = list(df_main.columns)
+        for col in desired_columns:
+            if col not in stats_df_for_write.columns:
+                stats_df_for_write[col] = np.nan
+        stats_df_for_write = stats_df_for_write[['Дата'] + desired_columns[1:]]
+
+        # Сначала пишем саму агрегацию (на строку ниже)
+        stats_df_for_write.to_excel(writer, sheet_name='Статья+Агрегация', index=False, startrow=startrow_agg+1)
+        workbook = writer.book
+        worksheet = writer.sheets['Статья+Агрегация']
+        # Теперь вставляем строку "целевая/резервная" для % колонок
+        config = load_config(CONFIG_PATH)
+        main_model = config.get('model_article', {}).get(article_name)
+        reserved_model = config.get('model_article_reserved_model', {}).get(article_name)
+        all_cols = list(stats_df_for_write.columns)
+        pct_col_idxs = [i for i, col in enumerate(all_cols) if '%' in col]
+        label_row = [''] * len(all_cols)
+        yellow_fmt = workbook.add_format({'bg_color': '#FFEB84'})
+        for i in pct_col_idxs:
+            col = all_cols[i]
+            if main_model and main_model.lower() in col.lower():
+                label_row[i] = 'целевая'
+                worksheet.write(startrow_agg, i, 'целевая', yellow_fmt)
+            elif reserved_model and reserved_model.lower() in col.lower():
+                label_row[i] = 'резервная'
+                worksheet.write(startrow_agg, i, 'резервная', yellow_fmt)
+            # иначе ничего не пишем и не выделяем
+
+        # Условное форматирование для процентных столбцов в строках с ABS и всеми "Больше 5%" и "Больше шт." (3-цветная шкала)
+        highlight_rows = []
+        for i, val in enumerate(stats_df_for_write['Дата']):
+            if isinstance(val, str) and (
+                'ABS' in val
+                or 'Больше 5%' in val
+                or 'Больше шт.' in val
+            ):
+                highlight_rows.append(i)
+        pct_cols = [j for j, col in enumerate(stats_df_for_write.columns) if '%' in col]
+        def colnum_string(n):
+            string = ""
+            while n >= 0:
+                string = chr(n % 26 + ord('A')) + string
+                n = n // 26 - 1
+            return string
+        for row in highlight_rows:
+            row_idx = startrow_agg + 2 + row  # +2 из-за вставленной строки
+            if not pct_cols:
+                continue
+            first_col = pct_cols[0]
+            last_col = pct_cols[-1]
+            col_letter_start = colnum_string(first_col)
+            col_letter_end = colnum_string(last_col)
+            cell_range = f'{col_letter_start}{row_idx + 1}:{col_letter_end}{row_idx + 1}'
+            worksheet.conditional_format(cell_range, {
+                'type': '3_color_scale',
+                'min_type': 'min',
+                'mid_type': 'percentile',
+                'mid_value': 50,
+                'max_type': 'max',
+                'min_color': '#006100',   # темно-зеленый
+                'mid_color': '#FFEB84',   # желтый
+                'max_color': '#9C0006',   # красный
+            })
+    output.seek(0)
+
+    # Сделать строку с заголовками нижней таблицы пустой через openpyxl
+    from openpyxl import load_workbook
+    output2 = BytesIO(output.read())
+    wb = load_workbook(output2)
+    ws = wb['Статья+Агрегация']
+    # строка с заголовками нижней таблицы — это startrow_agg + 2 (1-based) (т.к. добавили строку с "целевая/резервная")
+    header_row_idx = startrow_agg + 2
+    for cell in ws[header_row_idx]:
+        cell.value = None
+        cell.border = None
+    output_final = BytesIO()
+    wb.save(output_final)
+    output_final.seek(0)
+    return output_final

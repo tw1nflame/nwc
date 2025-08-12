@@ -1,8 +1,13 @@
+
+from utils.db_usage import export_article_with_agg_excel
+from fastapi import Query
+from utils.db_usage import get_article_stats_excel
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import shutil
 import os
+from urllib.parse import quote
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from celery.result import AsyncResult
@@ -198,3 +203,47 @@ async def upload_adjustments(
             pass
         
         raise HTTPException(status_code=500, detail=f"Ошибка обработки файла корректировок: {str(e)}")
+    
+@app.get("/export_article_stats/")
+async def export_article_stats(article: str = Query(..., description="Название статьи")):
+    """
+    Всегда возвращает Excel-файл со статистикой по статье.
+    Фронт может либо скачать, либо распарсить его для отображения.
+    """
+    try:
+        excel_bytes = get_article_stats_excel(article)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    filename = f"article_stats_{article}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    ascii_filename = "article_stats.xlsx"
+    disposition = f"attachment; filename={ascii_filename}; filename*=UTF-8''{quote(filename)}"
+    # Возвращаем как обычный Response с явным Content-Length, чтобы избежать проблем с chunked encoding
+    content = excel_bytes.getvalue()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": disposition,
+            "Content-Length": str(len(content)),
+        }
+    )
+
+
+# Новый эндпоинт для скачивания Excel по статье с агрегацией
+@app.get("/download_article_excel/")
+async def download_article_excel(article: str = Query(..., description="Название статьи")):
+    """
+    Скачивание Excel-файла по одной статье с агрегацией (данные + агрегированная таблица)
+    """
+    try:
+        excel_bytes = export_article_with_agg_excel(article)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    filename = f"article_{article}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    ascii_filename = "article.xlsx"
+    disposition = f"attachment; filename={ascii_filename}; filename*=UTF-8''{quote(filename)}"
+    return StreamingResponse(
+        excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": disposition}
+    )

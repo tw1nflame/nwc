@@ -37,8 +37,8 @@ ARTICLES = [
 
 # Основные колонки
 base_cols = [
-    'predict_naive', 'predict_autoARIMA', 'predict_TFT', 'predict_PatchTST', 'predict_Chronos_base',
-    'predict_TS_ML', 'predict_svm6', 'predict_svm9', 'predict_svm12',
+    'predict_naive',
+    'predict_TS_ML', 'predict_TS_tabular', 'predict_svm6', 'predict_svm9', 'predict_svm12',
     'predict_linreg6_with_bias', 'predict_linreg9_with_bias', 'predict_linreg12_with_bias',
     'predict_linreg6_no_bias', 'predict_linreg9_no_bias', 'predict_linreg12_no_bias',
     'predict_stacking_RFR'
