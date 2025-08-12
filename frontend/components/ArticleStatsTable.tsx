@@ -71,7 +71,7 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
     setError(null);
     fetchArticleStatsExcel(article)
       .then(({ columns, stats }) => {
-        console.log('[ArticleStatsTable] columns from backend:', columns);
+  // ...logging removed...
         setRawColumns(columns);
         setRawStats(stats);
       })

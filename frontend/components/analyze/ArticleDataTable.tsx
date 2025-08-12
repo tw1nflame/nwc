@@ -62,7 +62,10 @@ export function ArticleDataTable({
                   <th className="text-left py-3 px-3 font-semibold text-gray-900 border-r border-gray-300 min-w-[100px] h-[72px] align-middle">Дата</th>
                   <th className="text-center py-3 px-3 font-semibold text-gray-900 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Факт</th>
                   {forecastType === 'corrected' && (
-                    <th className="text-center py-3 px-3 font-semibold text-orange-700 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Корректировка</th>
+                    <>
+                      <th className="text-center py-3 px-3 font-semibold text-orange-700 border-r border-gray-400 min-w-[100px] h-[72px] align-middle">Корректировка</th>
+                      <th className="text-center py-3 px-3 font-semibold text-orange-700 border-r border-gray-400 min-w-[120px] h-[72px] align-middle">Финальный прогноз</th>
+                    </>
                   )}
                 </tr>
               </thead>
@@ -78,11 +81,18 @@ export function ArticleDataTable({
                         {row.actual !== null && row.actual !== undefined ? Number(row.actual).toLocaleString() : '-'}
                       </td>
                       {forecastType === 'corrected' && (
-                        <td className="py-3 px-3 text-center font-medium text-orange-700 border-r border-gray-400">
-                          {row.adjustments !== null && row.adjustments !== undefined && row.adjustments !== 0
-                            ? Number(row.adjustments).toLocaleString()
-                            : '0'}
-                        </td>
+                        <>
+                          <td className="py-3 px-3 text-center font-medium text-orange-700 border-r border-gray-400">
+                            {row.adjustments !== null && row.adjustments !== undefined && row.adjustments !== 0
+                              ? Number(row.adjustments).toLocaleString()
+                              : '0'}
+                          </td>
+                          <td className="py-3 px-3 text-center font-medium text-orange-700 border-r border-gray-400">
+                            {row.forecast !== null && row.forecast !== undefined
+                              ? Number(Number(row.forecast) + Number(row.adjustments || 0)).toLocaleString()
+                              : '-'}
+                          </td>
+                        </>
                       )}
                     </tr>
                   ))}
@@ -97,7 +107,7 @@ export function ArticleDataTable({
                   {selectedModels.map((model, modelIndex) => (
                     <React.Fragment key={model}>
                       <th className={`text-center py-3 px-3 font-semibold text-gray-700 h-[72px] align-middle ${modelIndex === 0 ? 'border-l-2 border-gray-500' : ''}`} style={{ width: `${100 / (selectedModels.length * 3)}%`, minWidth: '120px' }}>
-                        {forecastType === 'corrected' ? 'Скорректированный' : 'Прогноз'} ({model})
+                        Прогноз ({model})
                         {mainModelLower && model.toLowerCase() === mainModelLower && (
                           <span className="ml-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
                             целевая

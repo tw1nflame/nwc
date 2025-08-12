@@ -365,10 +365,7 @@ export function AnalysisPage() {
         return isUsdArticle ? 'USD' : 'RUB';
       };
 
-      // Для отладки: вывести все ключи первой строки
-      if (filtered.length > 0) {
-        console.log('[ArticleDataTable] Ключи первой строки parsedJson:', Object.keys(filtered[0]));
-      }
+  // ...existing code...
       const allChartData = selectedModels.map(model => ({
         model,
         data: filtered.map((row: any) => {
@@ -387,10 +384,32 @@ export function AnalysisPage() {
           );
           const error = errorKey ? row[errorKey] : undefined;
 
+          // Корректировки: ищем по дате, статье и модели в final_prediction
+          let adjustments = 0;
+          if (Array.isArray(finalPredictionJson)) {
+            const dateKey = (row["Дата"] ?? '').toString();
+            const articleKey = (row["Статья"] ?? '').toString().trim().toLowerCase();
+            const modelKey = model.toString().trim().toLowerCase();
+            const found = finalPredictionJson.find((adjRow: any) => {
+              const adjDate = (adjRow["Дата"] ?? adjRow["date"] ?? adjRow["Date"] ?? '').toString();
+              const adjArticle = (adjRow["Статья"] ?? adjRow["article"] ?? '').toString().trim().toLowerCase();
+              const adjModel = (adjRow["Модель"] ?? adjRow["model"] ?? '').toString().trim().toLowerCase();
+              return adjDate === dateKey && adjArticle === articleKey && adjModel === modelKey;
+            });
+            if (found) {
+              adjustments = found["Корректировка"] ?? found["adjustment"] ?? 0;
+            } else {
+              adjustments = row["Корректировка"] ?? row["adjustments"] ?? row[`adjustments_${model}`] ?? 0;
+            }
+          } else {
+            adjustments = row["Корректировка"] ?? row["adjustments"] ?? row[`adjustments_${model}`] ?? 0;
+          }
+
           // Конвертируем только числовые значения (не проценты)
           const factConv = convert(fact, baseCur, currency, rate);
           const forecastConv = convert(forecast, baseCur, currency, rate);
           const diffConv = convert(diff, baseCur, currency, rate);
+          const adjustmentsConv = convert(adjustments, baseCur, currency, rate);
 
           return {
             date: row["Дата"],
@@ -398,6 +417,7 @@ export function AnalysisPage() {
             forecast: forecastConv,
             difference: diffConv,
             errorPercent: error, // проценты не конвертируем!
+            adjustments: adjustmentsConv,
           };
         })
       }));

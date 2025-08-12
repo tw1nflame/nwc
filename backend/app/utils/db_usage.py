@@ -631,11 +631,12 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
                         'Fact': row.get('Fact'),
                         'Прогноз': row.get(mapped_pred_col),
                         'Корректировка': adjustment,
+                        'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
                         'Описание': description,
                         'Модель': model_name
                     })
                     
-                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Описание', 'Модель'])
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
                 df_final.to_excel(writer, index=False, sheet_name='final_prediction')
                 sheets_exported += 1
                 total_rows_exported += len(df_final)
