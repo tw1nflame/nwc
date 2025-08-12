@@ -48,7 +48,8 @@ def run_base_plus_pipeline(
         CHOSEN_MONTH,
         MONTHES_TO_PREDICT,
         result_file_name,
-        prev_predicts_file
+        prev_predicts_file,
+        status_manager=None
     ):
 
     result_dfs = []
@@ -61,6 +62,10 @@ def run_base_plus_pipeline(
     for target, features in ITEMS_TO_PREDICT.items():    # <!> Должны быть переданы статьи из интерфейса. st.session_state['items_to_predict']
         TARGET_COLUMN = target
         FEATURES = features
+
+        # Обновляем статус текущей статьи, если передан status_manager (аналогично BASE)
+        if status_manager:
+            status_manager.update_current_article(TARGET_COLUMN)
         PREDICT_TARGET_IN_USD = TARGET_COLUMN in config['Статьи для предикта в USD']
         FEATURES_TO_USD = TARGET_COLUMN in config['Фичи в Статьях для USD']
         FEATURES_TO_LAG = TARGET_COLUMN in config['Фичи в Статьях для LAG']
