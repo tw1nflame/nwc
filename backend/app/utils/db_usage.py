@@ -533,10 +533,12 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
 def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
     """
     Экспортирует все таблицы из sheet_to_table в Excel-файл в памяти и возвращает BytesIO.
+    Теперь использует save_dataframes_to_excel.
     """
+    from utils.excel_formatter import save_dataframes_to_excel
+    import tempfile
     logger = setup_custom_logging()
     logger.info(f"Начало экспорта таблиц в Excel. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
-    
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -545,172 +547,128 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
         dbname=DB_NAME
     )
     logger.info(f"Подключение к БД для экспорта установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-    
-    output = BytesIO()
     config = load_config(CONFIG_PATH)
     model_article = config.get('model_article', {})
-    logger.info(f"Загружена конфигурация модели: {len(model_article)} статей")
+    dataframes_dict = {}
     try:
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            sheets_exported = 0
-            total_rows_exported = 0
-            
-            if make_final_prediction:
-                logger.info("Создание финального предсказания")
-                
-                # Получаем данные из DATA_TABLE
-                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
-                logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
-                
-                # Получаем корректировки из отдельной таблицы
-                try:
-                    df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', conn)
-                    logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
-                    
-                    # Создаем дату из года и месяца для объединения
-                    df_adjustments['date'] = pd.to_datetime(
-                        df_adjustments['year'].astype(str) + '-' + 
-                        df_adjustments['month'].astype(str).str.zfill(2) + '-01'
-                    ) + pd.offsets.MonthEnd(0)
-                    
-                    # Убеждаемся, что типы дат совпадают для корректного объединения
-                    if 'date' in df_data.columns:
-                        df_data['date'] = pd.to_datetime(df_data['date'])
-                        df_adjustments['date'] = pd.to_datetime(df_adjustments['date'])
-                        logger.info(f"Типы дат приведены к единому формату: df_data.date = {df_data['date'].dtype}, df_adjustments.date = {df_adjustments['date'].dtype}")
-                    
-                    
-                    # Объединяем данные с корректировками
-                    df_data = df_data.merge(
-                        df_adjustments[['date', 'article', 'adjustment_value', 'description']], 
-                        left_on=['date', 'article'], 
-                        right_on=['date', 'article'], 
-                        how='left'
-                    )
-                    # Заполняем пропуски нулями для корректировок и пустыми строками для описаний
-                    df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
-                    df_data['description'] = df_data['description'].fillna('')
-                    logger.info(f"Данные объединены с корректировками: {len(df_data)} строк, корректировок с ненулевыми значениями: {(df_data['adjustment_value'] != 0).sum()}")
-                except Exception as adj_error:
-                    logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
-                    # Если таблица корректировок не существует, добавляем нулевые корректировки
-                    df_data['adjustment_value'] = 0
-                    df_data['description'] = ''
-                    logger.info("Добавлены нулевые корректировки")
-                
-                # Применяем маппинг к колонкам
-                original_columns = list(df_data.columns)
-                df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
-                mapped_columns = list(df_data.columns)
-                logger.info(f"Применено обратное маппинг колонок: {len(original_columns)} -> {len(mapped_columns)}")
-                
-                # Формируем финальный DataFrame
-                final_rows = []
-                for _, row in df_data.iterrows():
-                    article = row.get('Статья')
-                    model_name = model_article.get(article)
-                    if not model_name:
-                        continue
-                    pred_col = f'predict_{model_name}'
-                    # Найти колонку с учетом маппинга
-                    mapped_pred_col = None
-                    for col in df_data.columns:
-                        if col.lower() == pred_col.lower():
-                            mapped_pred_col = col
-                            break
-                    if not mapped_pred_col:
-                        continue
-                    
-                    # Получаем значение корректировки и описание
-                    adjustment = row.get('Корректировка, руб', 0) or 0
-                    description = row.get('Описание', '') or ''
-                    
-                    final_rows.append({
-                        'Дата': row.get('Дата'),
-                        'Статья': article,
-                        'Fact': row.get('Fact'),
-                        'Прогноз': row.get(mapped_pred_col),
-                        'Корректировка': adjustment,
-                        'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
-                        'Описание': description,
-                        'Модель': model_name
-                    })
-                    
-                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
-                df_final.to_excel(writer, index=False, sheet_name='final_prediction')
-                sheets_exported += 1
-                total_rows_exported += len(df_final)
-                logger.info(f"Создан лист final_prediction: {len(df_final)} строк")
-                
-            # Остальные листы
-            for sheet, table in sheet_to_table.items():
-                if table is None:
-                    logger.warning(f"Пропуск листа {sheet}: таблица не указана")
-                    continue
-                    
-                logger.info(f"Экспорт таблицы {table} в лист {sheet}")
-                df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
-                
-                original_columns = list(df.columns)
-                df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
-                mapped_columns = list(df.columns)
-                
-                df.to_excel(writer, index=False, sheet_name=sheet)
-                sheets_exported += 1
-                total_rows_exported += len(df)
-                logger.info(f"Лист {sheet} экспортирован: {len(df)} строк, колонки: {len(original_columns)} -> {len(mapped_columns)}")
-            
-            # Добавляем лист с корректировками, если таблица существует
+        # Финальный прогноз
+        if make_final_prediction:
+            logger.info("Создание финального предсказания")
+            df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
+            logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
             try:
-                df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
-                if not df_adjustments.empty:
-                    # Создаем дату из года и месяца для отображения
-                    df_adjustments['date'] = pd.to_datetime(
-                        df_adjustments['year'].astype(str) + '-' + 
-                        df_adjustments['month'].astype(str).str.zfill(2) + '-01'
-                    ) + pd.offsets.MonthEnd(0)
-                    
-                    # Оставляем только нужные колонки для экспорта
-                    df_adjustments = df_adjustments[['date', 'article', 'adjustment_value']]
-                    
-                    logger.info(f"Экспорт корректировок: {len(df_adjustments)} строк")
-                    # Применяем маппинг к колонкам
-                    df_adjustments.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_adjustments.columns]
-                    df_adjustments.to_excel(writer, index=False, sheet_name='Корректировки')
-                    sheets_exported += 1
-                    total_rows_exported += len(df_adjustments)
-                    logger.info("Лист Корректировки добавлен")
-                else:
-                    logger.info("Таблица корректировок пуста, лист не добавлен")
+                df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', conn)
+                logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
+                df_adjustments['date'] = pd.to_datetime(
+                    df_adjustments['year'].astype(str) + '-' + 
+                    df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                ) + pd.offsets.MonthEnd(0)
+                if 'date' in df_data.columns:
+                    df_data['date'] = pd.to_datetime(df_data['date'])
+                    df_adjustments['date'] = pd.to_datetime(df_adjustments['date'])
+                    logger.info(f"Типы дат приведены к единому формату: df_data.date = {df_data['date'].dtype}, df_adjustments.date = {df_adjustments['date'].dtype}")
+                df_data = df_data.merge(
+                    df_adjustments[['date', 'article', 'adjustment_value', 'description']], 
+                    left_on=['date', 'article'], 
+                    right_on=['date', 'article'], 
+                    how='left'
+                )
+                df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
+                df_data['description'] = df_data['description'].fillna('')
+                logger.info(f"Данные объединены с корректировками: {len(df_data)} строк, корректировок с ненулевыми значениями: {(df_data['adjustment_value'] != 0).sum()}")
             except Exception as adj_error:
-                logger.warning(f"Не удалось экспортировать корректировки: {adj_error}")
-                # Таблица корректировок не существует или пуста
-                pass
-            
-            # Добавляем лист с курсами валют, если таблица существует
-            try:
-                df_exchange_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', conn)
-                if not df_exchange_rates.empty:
-                    logger.info(f"Экспорт курсов валют: {len(df_exchange_rates)} строк")
-                    # Применяем маппинг к колонкам
-                    df_exchange_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_exchange_rates.columns]
-                    df_exchange_rates.to_excel(writer, index=False, sheet_name='Курсы валют')
-                    sheets_exported += 1
-                    total_rows_exported += len(df_exchange_rates)
-                    logger.info("Лист Курсы валют добавлен")
-                else:
-                    logger.info("Таблица курсов валют пуста, лист не добавлен")
-            except Exception as rate_error:
-                logger.warning(f"Не удалось экспортировать курсы валют: {rate_error}")
-                # Таблица курсов валют не существует или пуста
-                pass
-                
-            logger.info(f"Экспорт завершен: {sheets_exported} листов, {total_rows_exported} общих строк")
-        
-        output.seek(0)
-        logger.info("Excel файл создан в памяти и готов к возврату")
-        return output
-        
+                logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
+                df_data['adjustment_value'] = 0
+                df_data['description'] = ''
+                logger.info("Добавлены нулевые корректировки")
+            original_columns = list(df_data.columns)
+            df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
+            mapped_columns = list(df_data.columns)
+            logger.info(f"Применено обратное маппинг колонок: {len(original_columns)} -> {len(mapped_columns)}")
+            final_rows = []
+            for _, row in df_data.iterrows():
+                article = row.get('Статья')
+                model_name = model_article.get(article)
+                if not model_name:
+                    continue
+                pred_col = f'predict_{model_name}'
+                mapped_pred_col = None
+                for col in df_data.columns:
+                    if col.lower() == pred_col.lower():
+                        mapped_pred_col = col
+                        break
+                if not mapped_pred_col:
+                    continue
+                adjustment = row.get('Корректировка, руб', 0) or 0
+                description = row.get('Описание', '') or ''
+                final_rows.append({
+                    'Дата': row.get('Дата'),
+                    'Статья': article,
+                    'Fact': row.get('Fact'),
+                    'Прогноз': row.get(mapped_pred_col),
+                    'Корректировка': adjustment,
+                    'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
+                    'Описание': description,
+                    'Модель': model_name
+                })
+            df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
+            dataframes_dict['final_prediction'] = df_final
+        # Остальные листы
+        for sheet, table in sheet_to_table.items():
+            if table is None:
+                logger.warning(f"Пропуск листа {sheet}: таблица не указана")
+                continue
+            logger.info(f"Экспорт таблицы {table} в лист {sheet}")
+            df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
+            original_columns = list(df.columns)
+            df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+            mapped_columns = list(df.columns)
+            dataframes_dict[sheet] = df
+            logger.info(f"Лист {sheet} экспортирован: {len(df)} строк, колонки: {len(original_columns)} -> {len(mapped_columns)}")
+        # Корректировки
+        try:
+            df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
+            if not df_adjustments.empty:
+                df_adjustments['date'] = pd.to_datetime(
+                    df_adjustments['year'].astype(str) + '-' + 
+                    df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                ) + pd.offsets.MonthEnd(0)
+                df_adjustments = df_adjustments[['date', 'article', 'adjustment_value']]
+                logger.info(f"Экспорт корректировок: {len(df_adjustments)} строк")
+                df_adjustments.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_adjustments.columns]
+                dataframes_dict['Корректировки'] = df_adjustments
+                logger.info("Лист Корректировки добавлен")
+            else:
+                logger.info("Таблица корректировок пуста, лист не добавлен")
+        except Exception as adj_error:
+            logger.warning(f"Не удалось экспортировать корректировки: {adj_error}")
+            pass
+        # Курсы валют
+        try:
+            df_exchange_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', conn)
+            if not df_exchange_rates.empty:
+                logger.info(f"Экспорт курсов валют: {len(df_exchange_rates)} строк")
+                df_exchange_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_exchange_rates.columns]
+                dataframes_dict['Курсы валют'] = df_exchange_rates
+                logger.info("Лист Курсы валют добавлен")
+            else:
+                logger.info("Таблица курсов валют пуста, лист не добавлен")
+        except Exception as rate_error:
+            logger.warning(f"Не удалось экспортировать курсы валют: {rate_error}")
+            pass
+        # Сохраняем через save_dataframes_to_excel во временный файл
+        import os
+        tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        tmp.close()  # Закрываем, чтобы pandas/openpyxl могли открыть файл на запись
+        try:
+            save_dataframes_to_excel(dataframes_dict, tmp.name)
+            with open(tmp.name, 'rb') as f:
+                output = BytesIO(f.read())
+            output.seek(0)
+            logger.info("Excel файл создан в памяти и готов к возврату (через save_dataframes_to_excel)")
+            return output
+        finally:
+            os.remove(tmp.name)
     except Exception as e:
         logger.error(f"Ошибка при экспорте таблиц в Excel: {e}", exc_info=True)
         raise e
@@ -952,9 +910,9 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
     # Итоговый Excel: сначала все данные, потом агрегированная инфа
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # данные
+        # Верхняя таблица
         df_main.to_excel(writer, sheet_name='Статья+Агрегация', index=False, startrow=0)
-        # агрегация
+        # Нижняя таблица (агрегация)
         startrow_agg = len(df_main) + 3
         stats_df_for_write = stats_df.copy()
         stats_df_for_write.insert(0, 'Дата', stats_df_for_write.index)
@@ -964,12 +922,11 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
             if col not in stats_df_for_write.columns:
                 stats_df_for_write[col] = np.nan
         stats_df_for_write = stats_df_for_write[['Дата'] + desired_columns[1:]]
-
-        # Сначала пишем саму агрегацию (на строку ниже)
+        # Пишем агрегацию (на строку ниже)
         stats_df_for_write.to_excel(writer, sheet_name='Статья+Агрегация', index=False, startrow=startrow_agg+1)
+        # Далее — все кастомные стили для нижней таблицы (как было)
         workbook = writer.book
         worksheet = writer.sheets['Статья+Агрегация']
-        # Теперь вставляем строку "целевая/резервная" для % колонок
         config = load_config(CONFIG_PATH)
         main_model = config.get('model_article', {}).get(article_name)
         reserved_model = config.get('model_article_reserved_model', {}).get(article_name)
@@ -985,8 +942,6 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
             elif reserved_model and reserved_model.lower() in col.lower():
                 label_row[i] = 'резервная'
                 worksheet.write(startrow_agg, i, 'резервная', yellow_fmt)
-            # иначе ничего не пишем и не выделяем
-
         # Условное форматирование для процентных столбцов в строках с ABS и всеми "Больше 5%" и "Больше шт." (3-цветная шкала)
         highlight_rows = []
         for i, val in enumerate(stats_df_for_write['Дата']):
@@ -1024,16 +979,80 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
             })
     output.seek(0)
 
-    # Сделать строку с заголовками нижней таблицы пустой через openpyxl
+    # Форматируем только верхнюю таблицу (df_main) через openpyxl
     from openpyxl import load_workbook
     output2 = BytesIO(output.read())
     wb = load_workbook(output2)
     ws = wb['Статья+Агрегация']
-    # строка с заголовками нижней таблицы — это startrow_agg + 2 (1-based) (т.к. добавили строку с "целевая/резервная")
+    # Верхняя таблица: строки 1 (заголовок) до len(df_main)+1 включительно
+    from openpyxl.styles import numbers, Alignment
+    from openpyxl.utils import get_column_letter
+    header_height = 40
+    ws.row_dimensions[1].height = header_height
+    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    for col_idx in range(1, len(df_main.columns) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.alignment = header_alignment
+    # Определение типов столбцов для верхней таблицы
+    date_cols = []
+    pct_cols = []
+    num_cols = []
+    for col_idx, col_name in enumerate(df_main.columns, start=1):
+        col_dtype = df_main[col_name].dtype
+        if pd.api.types.is_datetime64_any_dtype(df_main[col_name]):
+            date_cols.append(col_idx)
+        elif '%' in col_name:
+            pct_cols.append(col_idx)
+        elif pd.api.types.is_numeric_dtype(col_dtype):
+            num_cols.append(col_idx)
+    # Форматирование ячеек верхней таблицы
+    for row in ws.iter_rows(min_row=2, max_row=len(df_main)+1, min_col=1, max_col=len(df_main.columns)):
+        for cell in row:
+            col_idx = cell.column
+            if col_idx in date_cols and cell.value:
+                cell.number_format = numbers.FORMAT_DATE_DDMMYY
+            elif col_idx in pct_cols and isinstance(cell.value, (int, float)):
+                cell.number_format = numbers.FORMAT_PERCENTAGE_00
+            elif col_idx in num_cols and isinstance(cell.value, (int, float)):
+                cell.number_format = '### ### ### ### ##0'
+    # Ширина столбцов
+    for col_letter in range(1, len(df_main.columns) + 1):
+        ws.column_dimensions[get_column_letter(col_letter)].width = 15
+    # Автофильтр только для верхней таблицы
+    if len(df_main) > 0:
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(df_main.columns))}{len(df_main)+1}"
+
+    # Очищаем строку-заголовок нижней таблицы до применения форматирования
     header_row_idx = startrow_agg + 2
     for cell in ws[header_row_idx]:
         cell.value = None
         cell.border = None
+
+    # После очистки строка с данными становится на место бывшей строки заголовка
+    # Форматируем проценты в нижней таблице (теперь первая строка данных — header_row_idx+1)
+    agg_data_start = header_row_idx + 1
+    agg_data_end = ws.max_row
+    agg_pct_cols = [i+1 for i, col in enumerate(stats_df_for_write.columns) if '%' in col]
+    # Получаем список строк, для которых НЕ нужно процентное форматирование ("Больше 5%" и "Больше шт.")
+    skip_percent_rows = []
+    for i, val in enumerate(stats_df_for_write['Дата']):
+        if isinstance(val, str) and (val.startswith('Больше 5%') or val.startswith('Больше шт.')):
+            skip_percent_rows.append(i)
+    # Определим индексы всех числовых столбцов (не процентов)
+    agg_num_cols = [i+1 for i, col in enumerate(stats_df_for_write.columns) if '%' not in col]
+    for row_idx, row in enumerate(ws.iter_rows(min_row=agg_data_start, max_row=agg_data_end, min_col=1, max_col=len(stats_df_for_write.columns))):
+        for cell in row:
+            # Если это строка "Больше 5%" или "Больше шт.", не применять процентный формат и привести к int
+            if row_idx in skip_percent_rows:
+                if cell.column in agg_pct_cols and isinstance(cell.value, (int, float)):
+                    cell.value = int(round(cell.value))
+            else:
+                if cell.column in agg_pct_cols and isinstance(cell.value, (int, float)):
+                    cell.number_format = "0%"
+            # Для всех непроцентных числовых столбцов — округление до целого
+            if cell.column in agg_num_cols and isinstance(cell.value, (int, float)):
+                cell.value = int(round(cell.value))
+
     output_final = BytesIO()
     wb.save(output_final)
     output_final.seek(0)
