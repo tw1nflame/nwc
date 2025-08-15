@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Line, LineChart, XAxis, YAxis, ResponsiveContainer, Legend } from "recharts"
+import dynamic from "next/dynamic";
+const BulletChartCard = dynamic(() => import("./BulletChartCard").then(mod => mod.BulletChartCard), { ssr: false });
 import { fetchExcelAndParseModels } from "./utils/fetchExcelAndParseModels"
 import { parseYamlConfig } from "./utils/parseYaml"
 import { fetchExcelDataForChart } from "./utils/fetchExcelDataForChart"
@@ -214,9 +216,51 @@ export function AnalysisPage() {
     setSelectedModels,
   } = useExcelContext()
 
+
   // Получаем главную модель для выбранной статьи
   const mainModel = config && config.model_article && selectedArticle ? config.model_article[selectedArticle] : null;
   const mainModelLower = mainModel ? mainModel.toLowerCase() : null;
+
+  // Bullet chart data: по всем статьям и всем моделям, используя parsedJson и config.model_article
+  const bulletChartData = React.useMemo(() => {
+    if (!parsedJson || !Array.isArray(parsedJson) || !config || !config.model_article) {
+      console.log('[BulletChartCard] bulletChartData: empty or missing dependencies', { parsedJson, config });
+      return [];
+    }
+    // Логгирование первых 5 строк parsedJson и их ключей
+    console.log('[BulletChartCard] parsedJson sample:', parsedJson.slice(0, 5));
+    parsedJson.slice(0, 5).forEach((row, idx) => {
+      console.log(`[BulletChartCard] parsedJson row[${idx}] keys:`, Object.keys(row));
+    });
+    const result: { article: string; deviation: number; difference: number; date: string; model: string }[] = [];
+    // Для каждой статьи брать только точки по целевой модели из config.model_article
+    const modelByArticle: Record<string, string> = {};
+    Object.entries(config.model_article).forEach(([article, model]) => {
+      modelByArticle[String(article)] = String(model);
+    });
+    parsedJson.forEach((row: any) => {
+      const article = row["Статья"] ?? row["article"];
+      const date = row["Дата"] ?? row["date"] ?? null;
+      if (!article || !date) return;
+      const modelStr = modelByArticle[String(article)];
+      if (!modelStr) return;
+      const diffKey = `predict_${modelStr} разница`;
+      const errorKey = `predict_${modelStr} отклонение %`;
+      const difference = row[diffKey];
+      const deviation = row[errorKey];
+      if (deviation !== undefined && difference !== undefined && deviation !== null && difference !== null) {
+        result.push({
+          article: String(article),
+          model: modelStr,
+          date: typeof date === 'number' ? excelSerialToDate(date) : date,
+          deviation: Number(deviation),
+          difference: Number(difference),
+        });
+      }
+    });
+    console.log('[BulletChartCard] bulletChartData result:', result);
+    return result;
+  }, [parsedJson, config]);
 
   // Логгирование для отладки определения главной модели
   useEffect(() => {
@@ -429,27 +473,37 @@ export function AnalysisPage() {
     setTimeout(() => setChartLoading(false), 300);
   }, [selectedArticle, selectedModels, parsedJson, currency, exchangeRatesJson, config]);
 
+
   return (
     <main className="flex-1 p-8">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Анализ прогнозов</h1>
-        <p className="text-gray-600 text-lg">Анализ точности прогнозирования и сравнение с фактическими данными</p>
-      </motion.div>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-solid mb-6" />
+          <div className="text-lg text-gray-500">Загрузка данных...</div>
+        </div>
+      ) : (
+        <>
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Анализ прогнозов</h1>
+            <p className="text-gray-600 text-lg">Анализ точности прогнозирования и сравнение с фактическими данными</p>
+            {/* Bullet график карточка */}
+            {bulletChartData.length > 0
+              ? <BulletChartCard data={bulletChartData} />
+              : <div style={{color:'red',fontWeight:'bold'}}>Нет данных для графика (bulletChartData пуст)</div>
+            }
+          </motion.div>
 
-      {/* Карточка параметров анализа */}
-      <Card className="shadow-lg border-gray-200 bg-white mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-gray-900">
-            <BarChart3 className="w-5 h-5 text-blue-600" />
-            Параметры анализа
-          </CardTitle>
-          <CardDescription>Выберите статью ЧОК и модели для анализа. Excel подгружается автоматически.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {loading ? (
-            <div className="text-center py-8 text-lg text-gray-500">Загрузка данных...</div>
-          ) : (
-            <div className="grid md:grid-cols-2 gap-6">
+          {/* Карточка параметров анализа */}
+          <Card className="shadow-lg border-gray-200 bg-white mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-gray-900">
+                <BarChart3 className="w-5 h-5 text-blue-600" />
+                Параметры анализа
+              </CardTitle>
+              <CardDescription>Выберите статью ЧОК и модели для анализа. Excel подгружается автоматически.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-6">
                 <div className="space-y-3">
                   <Label className="text-gray-800 font-semibold">Статья ЧОК</Label>
@@ -542,7 +596,6 @@ export function AnalysisPage() {
                   {models.map((model) => {
                     const isMainModel = mainModelLower && model.toLowerCase() === mainModelLower;
                     const isDisabled = forecastType === 'corrected' && !isMainModel;
-                    
                     return (
                       <label key={model} className={`flex items-center gap-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         <input
@@ -573,150 +626,151 @@ export function AnalysisPage() {
                 </div>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+  </CardContent>
+  </Card>
 
-        {/* Charts and stats only after article and at least one model selected */}
-        {!loading && selectedModels.length > 0 && selectedArticle && (
-          <div className="w-full min-h-[1200px]">
-            {chartLoading ? (
-              <div className="text-center py-8 text-lg text-gray-500">Загрузка графиков...</div>
-            ) : (
-              <>
-                <ArticleDataTable
-                  selectedArticle={selectedArticle}
-                  showFullTable={showFullTable}
-                  setShowFullTable={setShowFullTable}
-                  chartData={chartData}
-                  forecastType={forecastType}
-                  selectedModels={selectedModels}
-                  mainModelLower={mainModelLower}
-                  excelSerialToDate={excelSerialToDate}
-                />
+          {/* Charts and stats only after article and at least one model selected */}
+          {selectedModels.length > 0 && selectedArticle && (
+            <div className="w-full min-h-[1200px]">
+              {chartLoading ? (
+                <div className="text-center py-8 text-lg text-gray-500">Загрузка графиков...</div>
+              ) : (
+                <>
+                  <ArticleDataTable
+                    selectedArticle={selectedArticle}
+                    showFullTable={showFullTable}
+                    setShowFullTable={setShowFullTable}
+                    chartData={chartData}
+                    forecastType={forecastType}
+                    selectedModels={selectedModels}
+                    mainModelLower={mainModelLower}
+                    excelSerialToDate={excelSerialToDate}
+                  />
 
-                {/* Агрегированная информация по статье */}
-                <Card className="shadow-lg border-gray-200 bg-white mb-8">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2 text-gray-900">
-                          <Table className="w-5 h-5 text-green-600" />
-                          Агрегированная информация
-                        </CardTitle>
-                        <CardDescription>
-                          Статистические метрики по выбранной статье за все годы и периоды
-                        </CardDescription>
+                  {/* Агрегированная информация по статье */}
+                  <Card className="shadow-lg border-gray-200 bg-white mb-8">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2 text-gray-900">
+                            <Table className="w-5 h-5 text-green-600" />
+                            Агрегированная информация
+                          </CardTitle>
+                          <CardDescription>
+                            Статистические метрики по выбранной статье за все годы и периоды
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            if (!selectedArticle) return;
+                            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+                            const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
+                            try {
+                              const response = await fetch(url);
+                              if (!response.ok) throw new Error('Ошибка скачивания файла');
+                              const blob = await response.blob();
+                              const a = document.createElement('a');
+                              const currentDate = new Date().toISOString().split('T')[0];
+                              a.href = window.URL.createObjectURL(blob);
+                              a.download = `article_${selectedArticle}_${currentDate}.xlsx`;
+                              a.click();
+                              window.URL.revokeObjectURL(a.href);
+                            } catch (err) {
+                              alert('Ошибка скачивания файла');
+                            }
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          Скачать Excel
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          if (!selectedArticle) return;
-                          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-                          const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
-                          try {
-                            const response = await fetch(url);
-                            if (!response.ok) throw new Error('Ошибка скачивания файла');
-                            const blob = await response.blob();
-                            const a = document.createElement('a');
-                            const currentDate = new Date().toISOString().split('T')[0];
-                            a.href = window.URL.createObjectURL(blob);
-                            a.download = `article_${selectedArticle}_${currentDate}.xlsx`;
-                            a.click();
-                            window.URL.revokeObjectURL(a.href);
-                          } catch (err) {
-                            alert('Ошибка скачивания файла');
-                          }
-                        }}
-                        className="flex items-center gap-2"
-                      >
-                        Скачать Excel
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {/* Таблица статистики */}
-                  {selectedArticle && (
-                    <ArticleStatsTable
-                      article={selectedArticle}
-                      currency={currency}
-                      exchangeRatesJson={exchangeRatesJson}
-                      parsedJson={parsedJson}
-                      config={config}
-                    />
-                  )}
-                </Card>
+                    </CardHeader>
+                    {/* Таблица статистики */}
+                    {selectedArticle && (
+                      <ArticleStatsTable
+                        article={selectedArticle}
+                        currency={currency}
+                        exchangeRatesJson={exchangeRatesJson}
+                        parsedJson={parsedJson}
+                        config={config}
+                      />
+                    )}
+                  </Card>
 
-                <AnalysisGraphs
-                  chartData={chartData}
-                  mainModelLower={mainModelLower}
-                  forecastType={forecastType}
-                  selectedArticle={selectedArticle}
-                  ForecastChart={ForecastChart}
-                  ErrorChart={ErrorChart}
-                  AbsoluteDiffChart={AbsoluteDiffChart}
-                />
-                {/* Statistics Summary for all selected models */}
-                <Card className="shadow-lg border-gray-200 bg-white mb-8">
-                  <CardHeader>
-                    <CardTitle className="text-gray-900">Статистика точности</CardTitle>
-                    <CardDescription>Основные метрики качества прогнозирования для {selectedArticle} по всем выбранным моделям</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-900">Модель</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Средняя ошибка</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Макс. ошибка</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Точность</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">Мин. ошибка</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {chartData.map(({ model, data }) => (
-                            <tr key={model} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${mainModelLower && model.toLowerCase() === mainModelLower ? 'bg-blue-50' : ''}`}>
-                              <td className="py-4 px-4">
-                                <div className="flex items-center">
-                                  <span className={`font-medium ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-900' : 'text-gray-900'}`}>{model}</span>
-                                  {mainModelLower && model.toLowerCase() === mainModelLower && (
-                                    <span className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
-                                      целевая
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
-                                  {data.length ? `${(data.reduce((acc: any, d: any) => acc + (d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
-                                  {data.length ? `${Math.max(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
-                                  {data.length ? `${(100 - data.reduce((acc: any, d: any) => acc + Math.abs(d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
-                                  {data.length ? `${Math.min(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
-                                </span>
-                              </td>
+                  <AnalysisGraphs
+                    chartData={chartData}
+                    mainModelLower={mainModelLower}
+                    forecastType={forecastType}
+                    selectedArticle={selectedArticle}
+                    ForecastChart={ForecastChart}
+                    ErrorChart={ErrorChart}
+                    AbsoluteDiffChart={AbsoluteDiffChart}
+                  />
+                  {/* Statistics Summary for all selected models */}
+                  <Card className="shadow-lg border-gray-200 bg-white mb-8">
+                    <CardHeader>
+                      <CardTitle className="text-gray-900">Статистика точности</CardTitle>
+                      <CardDescription>Основные метрики качества прогнозирования для {selectedArticle} по всем выбранным моделям</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Модель</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Средняя ошибка</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Макс. ошибка</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Точность</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Мин. ошибка</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
-        )}
+                          </thead>
+                          <tbody>
+                            {chartData.map(({ model, data }) => (
+                              <tr key={model} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${mainModelLower && model.toLowerCase() === mainModelLower ? 'bg-blue-50' : ''}`}>
+                                <td className="py-4 px-4">
+                                  <div className="flex items-center">
+                                    <span className={`font-medium ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-900' : 'text-gray-900'}`}>{model}</span>
+                                    {mainModelLower && model.toLowerCase() === mainModelLower && (
+                                      <span className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
+                                        целевая
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                    {data.length ? `${(data.reduce((acc: any, d: any) => acc + (d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                    {data.length ? `${Math.max(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                    {data.length ? `${(100 - data.reduce((acc: any, d: any) => acc + Math.abs(d.errorPercent ?? d.error ?? 0), 0) / data.length).toFixed(2)}%` : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`text-sm font-bold ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-700' : 'text-gray-700'}`}>
+                                    {data.length ? `${Math.min(...data.map((d: any) => Math.abs(d.errorPercent ?? d.error ?? 0))).toFixed(2)}%` : '-'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </main>
   )
 }
