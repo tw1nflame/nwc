@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { downloadExcel } from "./utils/downloadExcel"
 import { uploadAdjustments } from "./utils/uploadAdjustments"
+import { useAuth } from "../context/AuthContext"
 
 function FileInput({
   label,
@@ -148,21 +149,20 @@ function UploadStatus({ status, message }: { status: "idle" | "uploading" | "suc
 }
 
 export function ExportPage() {
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
   const [correctionFile, setCorrectionFile] = useState<File | null>(null)
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle")
   const [uploadMessage, setUploadMessage] = useState("")
 
   const handleCorrectionUpload = async () => {
     if (!correctionFile) return
-
     setUploadStatus("uploading")
     setUploadMessage("")
-
     try {
-      const result = await uploadAdjustments(correctionFile) as any
+      const result = await uploadAdjustments(correctionFile, 'Дата', accessToken) as any
       setUploadStatus("success")
       setUploadMessage(`Успешно обработано ${result.processed_adjustments} корректировок`)
-      // Очищаем файл после успешной загрузки
       setTimeout(() => {
         setCorrectionFile(null)
         setUploadStatus("idle")
@@ -172,18 +172,14 @@ export function ExportPage() {
       setUploadMessage(error instanceof Error ? error.message : "Неизвестная ошибка")
     }
   }
-
   const handleExcelDownload = async () => {
     try {
-      const blob = await downloadExcel()
+      const blob = await downloadExcel(accessToken)
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      
-      // Добавляем текущую дату к названию файла
-      const currentDate = new Date().toISOString().split('T')[0] // Формат YYYY-MM-DD
+      const currentDate = new Date().toISOString().split('T')[0]
       a.download = `predict_${currentDate}.xlsx`
-      
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (err) {

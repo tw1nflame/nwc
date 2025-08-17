@@ -1,13 +1,15 @@
 import * as XLSX from "xlsx"
 
 // Accepts arrayBuffer, if not provided fetches from backend
-export async function fetchExcelAndParseModels(arrayBuffer) {
+export async function fetchExcelAndParseModels(arrayBuffer, accessToken) {
   if (!arrayBuffer) {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
     const url = backendUrl.replace(/\/$/, '') + '/export_excel/';
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
+    });
     if (!response.ok) throw new Error('Ошибка скачивания файла');
-    const blob = await response.blob();Context 
+    const blob = await response.blob();
     arrayBuffer = await blob.arrayBuffer();
   }
   const workbook = XLSX.read(arrayBuffer, { type: "array" });

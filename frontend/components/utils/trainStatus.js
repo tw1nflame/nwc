@@ -1,10 +1,12 @@
 // utils/trainStatus.js
-export async function fetchTrainStatus() {
+export async function fetchTrainStatus(accessToken) {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
   let url = backendUrl.replace(/\/$/, '') + '/train_status/';
   let response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, {
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
+    });
   } catch (e) {
     return { status: 'error', error: 'Network error', details: e.toString() };
   }

@@ -1,6 +1,6 @@
 import type React from "react"
-import { ExcelProvider } from "../context/ExcelContext"
-import { ConfigProvider } from "../context/ConfigContext"
+import { AuthProvider } from "../context/AuthContext"
+import ProvidersWithToken from "./ProvidersWithToken"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
@@ -12,11 +12,7 @@ export const metadata: Metadata = {
     generator: 'v0.dev'
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
       <head>
@@ -29,12 +25,12 @@ html {
         `}</style>
       </head>
       <body>
-        <ConfigProvider>
-          <ExcelProvider>
+        <AuthProvider>
+          <ProvidersWithToken>
             {children}
-          </ExcelProvider>
-        </ConfigProvider>
+          </ProvidersWithToken>
+        </AuthProvider>
       </body>
     </html>
-  )
+  );
 }

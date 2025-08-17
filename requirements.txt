@@ -1,3 +1,5 @@
+# Для проверки JWT токенов Supabase
+PyJWT>=2.0
 pandas
 streamlit
 plotly

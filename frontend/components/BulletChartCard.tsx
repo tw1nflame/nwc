@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect } from "react";
+import React from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import Plot from "react-plotly.js";
@@ -11,16 +11,8 @@ export interface BulletChartProps {
     difference: number;
     model?: string;
   }>;
-  onLoaded?: () => void;
 }
-export const BulletChartCard: React.FC<BulletChartProps> = ({ data, onLoaded }) => {
-  useEffect(() => {
-    if (onLoaded) {
-      // Даем небольшой таймаут для плавности, иначе может "мигнуть"
-      const t = setTimeout(() => onLoaded(), 100);
-      return () => clearTimeout(t);
-    }
-  }, [onLoaded]);
+export const BulletChartCard: React.FC<BulletChartProps> = ({ data }) => {
   // Фильтрация и группировка данных
   const filteredData = Array.isArray(data)
     ? data.filter(

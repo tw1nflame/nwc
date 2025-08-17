@@ -4,7 +4,7 @@
  * @param {string} dateColumn - название столбца с датой (по умолчанию 'Дата')
  * @returns {Promise<Object>} Результат загрузки
  */
-export async function uploadAdjustments(file, dateColumn = 'Дата') {
+export async function uploadAdjustments(file, dateColumn = 'Дата', accessToken) {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
   const url = backendUrl.replace(/\/$/, '') + '/upload_adjustments/';
   
@@ -15,6 +15,7 @@ export async function uploadAdjustments(file, dateColumn = 'Дата') {
   const response = await fetch(url, {
     method: 'POST',
     body: formData,
+    headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
   });
   
   if (!response.ok) {

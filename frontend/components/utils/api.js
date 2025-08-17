@@ -1,4 +1,4 @@
-export async function sendTrainRequest({ pipeline, selectedItems, date, dataFile }) {
+export async function sendTrainRequest({ pipeline, selectedItems, date, dataFile, accessToken }) {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
   const formData = new FormData();
   formData.append('pipeline', pipeline);
@@ -11,7 +11,8 @@ export async function sendTrainRequest({ pipeline, selectedItems, date, dataFile
   try {
     response = await fetch(url, {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
     });
   } catch (e) {
     return { error: 'Network error', details: e.toString() };

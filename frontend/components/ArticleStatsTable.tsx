@@ -1,7 +1,7 @@
-
 import React, { useEffect, useState } from "react";
 import { CardContent } from "@/components/ui/card";
 import { fetchArticleStatsExcel } from "./utils/fetchArticleStatsExcel";
+import { useAuth } from "../context/AuthContext";
 
 
 interface ArticleStatsTableProps {
@@ -14,6 +14,8 @@ interface ArticleStatsTableProps {
 
 
 export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, currency, exchangeRatesJson, parsedJson, config }) => {
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
   const [rawStats, setRawStats] = useState<any[][] | null>(null);
   const [rawColumns, setRawColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,15 +71,14 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
     if (!article) return;
     setLoading(true);
     setError(null);
-    fetchArticleStatsExcel(article)
+    fetchArticleStatsExcel(article, accessToken)
       .then(({ columns, stats }) => {
-  // ...logging removed...
         setRawColumns(columns);
         setRawStats(stats);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [article]);
+  }, [article, accessToken]);
 
   // Фильтрация столбцов под выбранную валюту: показываем только (RUB) или (USD) + проценты
   const { columns, stats } = React.useMemo(() => {

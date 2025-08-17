@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -39,11 +41,17 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
   }
 
   const handleConfigLoad = () => {
-    console.log("Загрузка конфига...")
   }
 
   const handleLogDownload = () => {
-    console.log("Скачивание логов...")
+  }
+
+  const { logout } = useAuth()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    await logout()
+    router.replace("/login")
   }
 
   return (
@@ -184,6 +192,16 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
             </Collapsible>
           </SidebarGroupContent>
         </SidebarGroup>
+        {/* Кнопка выйти снизу */}
+        <div className="mt-auto p-4">
+          <Button
+            variant="outline"
+            className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
+            onClick={handleLogout}
+          >
+            Выйти
+          </Button>
+        </div>
       </SidebarContent>
     </Sidebar>
   )

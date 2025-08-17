@@ -32,7 +32,10 @@ import { useConfig } from "../context/ConfigContext"
 import { sendTrainRequest } from "./utils/api"
 import { fetchTrainStatus } from "./utils/trainStatus"
 import { stopTrainTask } from "./utils/stopTrain"
+import { useAuth } from "../context/AuthContext"
 import { clearTrainStatus } from "./utils/clearStatus"
+
+
 
 function MonthYearPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -272,7 +275,7 @@ function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onC
   const Icon = config.icon
 
   const handleClearStatus = async () => {
-    await clearTrainStatus()
+    await clearTrainStatus(accessToken)
     onClearStatus && onClearStatus()
   }
 
@@ -401,8 +404,11 @@ function PredictForm({
     onSubmit && onSubmit({ pipeline, selectedItems, date, dataFile })
   }
 
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
+
   const handleStop = async () => {
-    await stopTrainTask()
+    await stopTrainTask(accessToken)
     onStop && onStop()
   }
 
@@ -569,21 +575,19 @@ function PredictForm({
   )
 }
 
-export function TrainingPage() {
+export default function TrainingPage() {
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
+  // Логируем accessToken для отладки
   const { config, loading: configLoading } = useConfig();
   const [trainStatus, setTrainStatus] = useState<any>({ status: "idle" })
   const [polling, setPolling] = useState(false)
 
   useEffect(() => {
-    // config is now provided by context
-    // no need to fetch config here
-  }, [])
-
-  useEffect(() => {
     let ignore = false
     async function checkStatus() {
-      const status = await fetchTrainStatus()
-      
+      const status = await fetchTrainStatus(accessToken)
+      // Логируем ответ от train_status
       if (!ignore) {
         setTrainStatus(status && status.status ? status : { status: "idle" })
         if (status.status === "running") setPolling(true)
@@ -594,23 +598,23 @@ export function TrainingPage() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [accessToken])
 
   useEffect(() => {
     if (!polling) return
     const interval = setInterval(async () => {
-      const status = await fetchTrainStatus()
-      
+      const status = await fetchTrainStatus(accessToken)
+      // Логируем ответ от train_status при polling
       setTrainStatus(status && status.status ? status : { status: "idle" })
       if (status.status !== "running") {
         setPolling(false)
       }
     }, 2000)
     return () => clearInterval(interval)
-  }, [polling])
+  }, [polling, accessToken])
 
   const handleTrainSubmit = async ({ pipeline, selectedItems, date, dataFile }: any) => {
-    await sendTrainRequest({ pipeline, selectedItems, date, dataFile })
+    await sendTrainRequest({ pipeline, selectedItems, date, dataFile, accessToken })
     setPolling(true)
   }
 

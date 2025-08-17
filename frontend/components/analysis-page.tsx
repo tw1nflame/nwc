@@ -21,6 +21,7 @@ import { fetchExcelDataForChart } from "./utils/fetchExcelDataForChart"
 import * as XLSX from "xlsx"
 import { useEffect } from "react"
 import { useConfig } from "../context/ConfigContext"
+import { useAuth } from "../context/AuthContext"
 
 const chartConfig = {
   forecast: {
@@ -190,6 +191,8 @@ function AbsoluteDiffChart({ data, mainModelLower }: { data: any[], mainModelLow
 
 export function AnalysisPage() {
   const { config, loading: configLoading } = useConfig();
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
   const [chartData, setChartData] = useState<any[]>([])
   const [chartLoading, setChartLoading] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -205,8 +208,8 @@ export function AnalysisPage() {
     setArticles,
     parsedJson,
     setParsedJson,
-  finalPredictionJson,
-  setFinalPredictionJson,
+    finalPredictionJson,
+    setFinalPredictionJson,
     exchangeRatesJson,
     setExchangeRatesJson,
     // Используем состояние из контекста
@@ -224,13 +227,10 @@ export function AnalysisPage() {
   // Bullet chart data: по всем статьям и всем моделям, используя parsedJson и config.model_article
   const bulletChartData = React.useMemo(() => {
     if (!parsedJson || !Array.isArray(parsedJson) || !config || !config.model_article) {
-      console.log('[BulletChartCard] bulletChartData: empty or missing dependencies', { parsedJson, config });
       return [];
     }
     // Логгирование первых 5 строк parsedJson и их ключей
-    console.log('[BulletChartCard] parsedJson sample:', parsedJson.slice(0, 5));
     parsedJson.slice(0, 5).forEach((row, idx) => {
-      console.log(`[BulletChartCard] parsedJson row[${idx}] keys:`, Object.keys(row));
     });
     const result: { article: string; deviation: number; difference: number; date: string; model: string }[] = [];
     // Для каждой статьи брать только точки по целевой модели из config.model_article
@@ -258,7 +258,6 @@ export function AnalysisPage() {
         });
       }
     });
-    console.log('[BulletChartCard] bulletChartData result:', result);
     return result;
   }, [parsedJson, config]);
 
@@ -319,13 +318,15 @@ export function AnalysisPage() {
         // Загружаем Excel-файл только если его нет
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
         const url = backendUrl.replace(/\/$/, '') + '/export_excel/';
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
+        });
         if (!response.ok) throw new Error('Ошибка скачивания файла');
         const blob = await response.blob();
         const arrayBuffer = await blob.arrayBuffer();
         setExcelBuffer(arrayBuffer);
         // Получаем модели через utils
-        const filteredModels = await fetchExcelAndParseModels(arrayBuffer);
+        const filteredModels = await fetchExcelAndParseModels(arrayBuffer, accessToken);
         setModels(filteredModels);
         // get articles from config context
         const articleList = config && config["Статья"] ? Object.keys(config["Статья"]) : [];
@@ -409,7 +410,6 @@ export function AnalysisPage() {
         return isUsdArticle ? 'USD' : 'RUB';
       };
 
-  // ...existing code...
       const allChartData = selectedModels.map(model => ({
         model,
         data: filtered.map((row: any) => {
@@ -667,7 +667,9 @@ export function AnalysisPage() {
                             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
                             const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
                             try {
-                              const response = await fetch(url);
+                              const response = await fetch(url, {
+                                headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
+                              });
                               if (!response.ok) throw new Error('Ошибка скачивания файла');
                               const blob = await response.blob();
                               const a = document.createElement('a');

@@ -5,7 +5,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
 const cache = new Map(); // article -> { ts, data }
 const inflight = new Map(); // article -> Promise
 
-export async function fetchArticleStatsExcel(article) {
+export async function fetchArticleStatsExcel(article, accessToken) {
   const now = Date.now();
   const cached = cache.get(article);
   if (cached && now - cached.ts < CACHE_TTL_MS) {
@@ -18,8 +18,11 @@ export async function fetchArticleStatsExcel(article) {
   const url = backendUrl.replace(/\/$/, '') + `/export_article_stats/?article=${encodeURIComponent(article)}`;
   const promise = (async () => {
     let response;
+    response = await fetch(url, {
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined,
+      cache: 'no-store'
+    });
     try {
-      response = await fetch(url, { cache: 'no-store' });
       if (!response.ok) throw new Error('Ошибка скачивания файла');
       const blob = await response.blob();
       const arrayBuffer = await blob.arrayBuffer();

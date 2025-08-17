@@ -1,4 +1,3 @@
-
 from utils.db_usage import export_article_with_agg_excel
 from fastapi import Query
 from utils.db_usage import get_article_stats_excel
@@ -13,16 +12,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from celery.result import AsyncResult
 from tasks import train_task
 from fastapi.responses import FileResponse, StreamingResponse, Response
+from fastapi import Request
 
 from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE, process_adjustments_file
 from utils.training_status import training_status_manager
+from utils.auth import require_authentication
 
 app = FastAPI()
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
 
 @app.get("/config")
-async def get_config():
+@require_authentication
+async def get_config(request: Request):
     """
     Возвращает содержимое config_refined.yaml из корня проекта.
     """
@@ -46,7 +48,9 @@ os.makedirs(TRAINING_FILES_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 @app.post("/train/")
+@require_authentication
 async def train(
+    request: Request,
     pipeline: str = Form(...),
     items: str = Form(...),
     date: str = Form(...),
@@ -74,14 +78,16 @@ async def train(
     return {"status": "ok", "task_id": celery_task.id}
 
 @app.get("/current_task_id")
-async def get_current_task_id():
+@require_authentication
+async def get_current_task_id(request: Request):
     task_id = training_status_manager.get_current_task_id()
     if not task_id:
         return {"task_id": None}
     return {"task_id": task_id}
 
 @app.get("/train_status/")
-async def train_status():
+@require_authentication
+async def train_status(request: Request):
     task_id = training_status_manager.get_current_task_id()
     if not task_id:
         return {"status": "idle"}
@@ -109,7 +115,8 @@ async def train_status():
         return {"status": res.state.lower(), **progress}
 
 @app.post("/stop_train/")
-async def stop_train():
+@require_authentication
+async def stop_train(request: Request):
     task_id = training_status_manager.get_current_task_id()
     if not task_id:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -127,7 +134,8 @@ async def stop_train():
     return {"status": "revoked", "task_id": task_id}
 
 @app.post("/clear_status/")
-async def clear_status():
+@require_authentication
+async def clear_status(request: Request):
     """
     Очистка статуса завершенного обучения (кнопка ОК на фронтенде)
     """
@@ -135,11 +143,13 @@ async def clear_status():
     return {"status": "cleared"}
 
 @app.get("/")
-async def root():
+@require_authentication
+async def root(request: Request):
     return {"message": "Hello World"}
 
 @app.get("/export_excel/")
-async def export_excel():
+@require_authentication
+async def export_excel(request: Request):
     """
     Экспортирует таблицы BASEPLUS pipeline в Excel и возвращает файл из памяти.
     """
@@ -153,7 +163,9 @@ async def export_excel():
     )
 
 @app.post("/upload_adjustments/")
+@require_authentication
 async def upload_adjustments(
+    request: Request,
     adjustments_file: UploadFile = File(...),
     date_column: str = Form(default="Дата")
 ):
@@ -205,7 +217,8 @@ async def upload_adjustments(
         raise HTTPException(status_code=500, detail=f"Ошибка обработки файла корректировок: {str(e)}")
     
 @app.get("/export_article_stats/")
-async def export_article_stats(article: str = Query(..., description="Название статьи")):
+@require_authentication
+async def export_article_stats(request: Request, article: str = Query(..., description="Название статьи")):
     """
     Всегда возвращает Excel-файл со статистикой по статье.
     Фронт может либо скачать, либо распарсить его для отображения.
@@ -231,7 +244,8 @@ async def export_article_stats(article: str = Query(..., description="Назва
 
 # Новый эндпоинт для скачивания Excel по статье с агрегацией
 @app.get("/download_article_excel/")
-async def download_article_excel(article: str = Query(..., description="Название статьи")):
+@require_authentication
+async def download_article_excel(request: Request, article: str = Query(..., description="Название статьи")):
     """
     Скачивание Excel-файла по одной статье с агрегацией (данные + агрегированная таблица)
     """
@@ -247,3 +261,5 @@ async def download_article_excel(article: str = Query(..., description="Назв
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": disposition}
     )
+
+
