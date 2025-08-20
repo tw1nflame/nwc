@@ -236,7 +236,7 @@ def extract_ensemble_info(data: Dict,
 
 def load_and_save_config():
     st.title("Конфигурация проекта")
-    st.markdown("Загрузите новый конфигурационный файл (config_refined.yaml)")
+    st.markdown("Загрузите новый конфигурационный файл (backend/config_refined.yaml)")
     
     # Загрузка файла
     uploaded_file = st.file_uploader(
@@ -257,7 +257,7 @@ def load_and_save_config():
             # Кнопка для сохранения
             if st.button("Сохранить конфигурацию"):
                 # Определяем путь для сохранения
-                config_path = Path("config_refined.yaml")
+                config_path = Path("../config_refined.yaml")
                 
                 # Сохраняем файл
                 with open(config_path, 'w', encoding='utf-8') as f:

@@ -45,7 +45,7 @@ SHEET_TO_TABLE = {
 }
 
 
-CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../config_refined.yaml'))
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
 
 def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_value: str = None, date_column: str = None):
     """
@@ -532,13 +532,20 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
 
 def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
     """
-    Экспортирует все таблицы из sheet_to_table в Excel-файл в памяти и возвращает BytesIO.
-    Теперь использует save_dataframes_to_excel.
+    [DEPRECATED] Используйте collect_pipeline_tables_data и dataframes_to_excel
     """
-    from utils.excel_formatter import save_dataframes_to_excel
-    import tempfile
+    dataframes_dict = collect_pipeline_tables_data(sheet_to_table, make_final_prediction)
+    return dataframes_to_excel(dataframes_dict)
+
+
+def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bool = False) -> dict:
+    """
+    Собирает все таблицы из sheet_to_table и связанные данные в dict датафреймов.
+    """
     logger = setup_custom_logging()
-    logger.info(f"Начало экспорта таблиц в Excel. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
+    logger.info(f"Начало сбора таблиц. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
+    import psycopg2
+    import pandas as pd
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -546,7 +553,7 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
         password=DB_PASSWORD,
         dbname=DB_NAME
     )
-    logger.info(f"Подключение к БД для экспорта установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    logger.info(f"Подключение к БД для сбора установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
     config = load_config(CONFIG_PATH)
     model_article = config.get('model_article', {})
     dataframes_dict = {}
@@ -656,25 +663,34 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
         except Exception as rate_error:
             logger.warning(f"Не удалось экспортировать курсы валют: {rate_error}")
             pass
-        # Сохраняем через save_dataframes_to_excel во временный файл
-        import os
-        tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
-        tmp.close()  # Закрываем, чтобы pandas/openpyxl могли открыть файл на запись
-        try:
-            save_dataframes_to_excel(dataframes_dict, tmp.name)
-            with open(tmp.name, 'rb') as f:
-                output = BytesIO(f.read())
-            output.seek(0)
-            logger.info("Excel файл создан в памяти и готов к возврату (через save_dataframes_to_excel)")
-            return output
-        finally:
-            os.remove(tmp.name)
+        return dataframes_dict
     except Exception as e:
-        logger.error(f"Ошибка при экспорте таблиц в Excel: {e}", exc_info=True)
+        logger.error(f"Ошибка при сборе таблиц: {e}", exc_info=True)
         raise e
     finally:
         conn.close()
-        logger.info("Соединение с БД для экспорта закрыто")
+        logger.info("Соединение с БД для сбора закрыто")
+
+
+def dataframes_to_excel(dataframes_dict: dict) -> BytesIO:
+    """
+    Сохраняет dict датафреймов в Excel-файл в памяти и возвращает BytesIO.
+    """
+    from utils.excel_formatter import save_dataframes_to_excel
+    import tempfile
+    import os
+    logger = setup_custom_logging()
+    tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+    tmp.close()
+    try:
+        save_dataframes_to_excel(dataframes_dict, tmp.name)
+        with open(tmp.name, 'rb') as f:
+            output = BytesIO(f.read())
+        output.seek(0)
+        logger.info("Excel файл создан в памяти и готов к возврату (dataframes_to_excel)")
+        return output
+    finally:
+        os.remove(tmp.name)
 
 def get_article_stats_excel(article_name: str) -> BytesIO:
     """
@@ -1057,3 +1073,90 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
     wb.save(output_final)
     output_final.seek(0)
     return output_final
+
+def get_bullet_chart_data() -> dict:
+    """
+    Возвращает данные для bullet-графика и курсы валют.
+    {
+        'data': [...],
+        'exchange_rates': [...]
+    }
+    """
+    logger = setup_custom_logging()
+    import psycopg2
+    import pandas as pd
+    import sqlalchemy
+    db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    engine = sqlalchemy.create_engine(db_url)
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    config = load_config(CONFIG_PATH)
+    model_article = config.get('model_article', {})
+    usd_articles = config.get('Статьи для предикта в USD', [])
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', engine)
+        df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+        # Приводим все имена колонок к нижнему регистру для унификации поиска
+        df.columns = [col.lower() for col in df.columns]
+        result = []
+        for idx, row in df.iterrows():
+            row_dict = {k.lower(): v for k, v in row.items()}
+            article = row_dict.get('статья')
+            date = row_dict.get('дата')
+            base_article = article
+            if article and article.endswith('_USD'):
+                base_article = article[:-4]
+            model = model_article.get(base_article)
+            if not model:
+                # fallback to lower-case key if needed
+                model = model_article.get(base_article.lower())
+            diff_key = f'predict_{model} разница'.lower() if model else None
+            dev_key = f'predict_{model} отклонение %'.lower() if model else None
+            difference = row_dict.get(diff_key) if diff_key else None
+            deviation = row_dict.get(dev_key) if dev_key else None
+            if isinstance(date, pd.Timestamp):
+                date_str = date.strftime('%Y-%m-%d')
+            else:
+                date_str = str(date)
+
+            def safe_float(val):
+                try:
+                    f = float(val)
+                    if np.isnan(f) or np.isinf(f):
+                        return None
+                    return f
+                except Exception:
+                    return None
+                
+            # Если статья в USD, возвращаем без _USD
+            article_for_front = article[:-4] if article and article.endswith('_USD') else article
+            result.append({
+                'article': article_for_front,
+                'model': model,
+                'date': date_str,
+                'deviation': safe_float(deviation),
+                'difference': safe_float(difference)
+            })
+        # Получить курсы валют
+        try:
+            if not EXCHANGE_RATE_TABLE:
+                raise ValueError('EXCHANGE_RATE_TABLE env var is not set')
+            df_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', engine)
+            df_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_rates.columns]
+            exchange_rates = df_rates.to_dict(orient='records')
+            # Преобразовать все значения типа date в строку
+            for row in exchange_rates:
+                for k, v in row.items():
+                    if hasattr(v, 'isoformat'):
+                        row[k] = v.isoformat()
+        except Exception as e:
+            logger.warning(f"Не удалось получить курсы валют: {e}")
+            exchange_rates = []
+        return {'data': result, 'exchange_rates': exchange_rates}
+    finally:
+        conn.close()

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import shutil
 import os
+from dotenv import load_dotenv
 from urllib.parse import quote
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,10 +18,11 @@ from fastapi import Request
 from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE, process_adjustments_file
 from utils.training_status import training_status_manager
 from utils.auth import require_authentication
+from tech_access.router import router as tech_router
 
 app = FastAPI()
 
-CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config_refined.yaml'))
 
 @app.get("/config")
 @require_authentication
@@ -34,9 +36,12 @@ async def get_config(request: Request):
         content = f.read()
     return Response(content, media_type="text/yaml")
 
+load_dotenv()
+frontend_urls = os.getenv("FRONTEND_URL", "http://localhost:3000")
+frontend_origins = [u.strip() for u in frontend_urls.split(",") if u.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -46,6 +51,8 @@ TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tr
 RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results'))
 os.makedirs(TRAINING_FILES_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
+app.include_router(tech_router)
 
 @app.post("/train/")
 @require_authentication
@@ -263,3 +270,19 @@ async def download_article_excel(request: Request, article: str = Query(..., des
     )
 
 
+from utils.db_usage import get_bullet_chart_data
+# Новый эндпоинт для данных bullet-графика
+@app.get("/bullet_chart_data/")
+@require_authentication
+async def bullet_chart_data(request: Request):
+    """
+    Возвращает данные для bullet-графика (по всем статьям, только целевые модели).
+    """
+    import traceback
+    try:
+        out = get_bullet_chart_data()
+        return JSONResponse(content=out)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[bullet_chart_data ERROR] {e}\n{tb}")
+        return JSONResponse(status_code=500, content={"error": str(e), "traceback": tb})

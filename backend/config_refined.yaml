@@ -181,3 +181,16 @@ model_article_reserved_model:
   Авансовые платежи по налогу на прибыль: linreg9_no_bias
   Обязательства по налогу на прибыль: naive
   ЧОК (нормализовано на расчеты с акционерами): stacking_rfr
+
+
+bullet_chart_limits:
+  RUB:
+    diff_min: -10
+    diff_max: 10
+    deviation_min: -5
+    deviation_max: 5
+  USD:
+    diff_min: -0.142
+    diff_max: 0.142
+    deviation_min: -5
+    deviation_max: 5

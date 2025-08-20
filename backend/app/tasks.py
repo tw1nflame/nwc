@@ -18,7 +18,7 @@ os.makedirs(log_dir, exist_ok=True)
 # Инициализируем логирование для Celery worker
 logger = setup_custom_logging(os.path.join(log_dir, "celery_worker.log"))
 
-CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config_refined.yaml'))
 RESULTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../results'))
 TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'training_files'))
 

@@ -224,42 +224,7 @@ export function AnalysisPage() {
   const mainModel = config && config.model_article && selectedArticle ? config.model_article[selectedArticle] : null;
   const mainModelLower = mainModel ? mainModel.toLowerCase() : null;
 
-  // Bullet chart data: по всем статьям и всем моделям, используя parsedJson и config.model_article
-  const bulletChartData = React.useMemo(() => {
-    if (!parsedJson || !Array.isArray(parsedJson) || !config || !config.model_article) {
-      return [];
-    }
-    // Логгирование первых 5 строк parsedJson и их ключей
-    parsedJson.slice(0, 5).forEach((row, idx) => {
-    });
-    const result: { article: string; deviation: number; difference: number; date: string; model: string }[] = [];
-    // Для каждой статьи брать только точки по целевой модели из config.model_article
-    const modelByArticle: Record<string, string> = {};
-    Object.entries(config.model_article).forEach(([article, model]) => {
-      modelByArticle[String(article)] = String(model);
-    });
-    parsedJson.forEach((row: any) => {
-      const article = row["Статья"] ?? row["article"];
-      const date = row["Дата"] ?? row["date"] ?? null;
-      if (!article || !date) return;
-      const modelStr = modelByArticle[String(article)];
-      if (!modelStr) return;
-      const diffKey = `predict_${modelStr} разница`;
-      const errorKey = `predict_${modelStr} отклонение %`;
-      const difference = row[diffKey];
-      const deviation = row[errorKey];
-      if (deviation !== undefined && difference !== undefined && deviation !== null && difference !== null) {
-        result.push({
-          article: String(article),
-          model: modelStr,
-          date: typeof date === 'number' ? excelSerialToDate(date) : date,
-          deviation: Number(deviation),
-          difference: Number(difference),
-        });
-      }
-    });
-    return result;
-  }, [parsedJson, config]);
+
 
   // Логгирование для отладки определения главной модели
   useEffect(() => {
@@ -486,11 +451,7 @@ export function AnalysisPage() {
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Анализ прогнозов</h1>
             <p className="text-gray-600 text-lg">Анализ точности прогнозирования и сравнение с фактическими данными</p>
-            {/* Bullet график карточка */}
-            {bulletChartData.length > 0
-              ? <BulletChartCard data={bulletChartData} />
-              : <div style={{color:'red',fontWeight:'bold'}}>Нет данных для графика (bulletChartData пуст)</div>
-            }
+            {/* Здесь был Bullet график. Теперь он в разделе "Общая аналитика". */}
           </motion.div>
 
           {/* Карточка параметров анализа */}
@@ -500,7 +461,7 @@ export function AnalysisPage() {
                 <BarChart3 className="w-5 h-5 text-blue-600" />
                 Параметры анализа
               </CardTitle>
-              <CardDescription>Выберите статью ЧОК и модели для анализа. Excel подгружается автоматически.</CardDescription>
+              <CardDescription>Выберите статью ЧОК и модели для анализа.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">

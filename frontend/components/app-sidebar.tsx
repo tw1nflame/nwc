@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
+import { TechAccessPanel } from "./TechAccessPanel"
 import { motion, AnimatePresence } from "framer-motion"
 import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,8 +23,8 @@ import {
 } from "@/components/ui/sidebar"
 
 interface AppSidebarProps {
-  currentPage: "training" | "analysis" | "export"
-  onPageChange: (page: "training" | "analysis" | "export") => void
+  currentPage: "training" | "analysis" | "export" | "analytics"
+  onPageChange: (page: "training" | "analysis" | "export" | "analytics") => void
 }
 
 export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
@@ -85,12 +86,22 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  onClick={() => onPageChange("analytics")}
+                  isActive={currentPage === "analytics"}
+                  className="w-full justify-start"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Общая аналитика</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
                   onClick={() => onPageChange("analysis")}
                   isActive={currentPage === "analysis"}
                   className="w-full justify-start"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Визуализация и Анализ</span>
+                  <span>Аналитика по статьям</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
@@ -123,71 +134,8 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
                 </Button>
               </CollapsibleTrigger>
 
-              <CollapsibleContent className="space-y-4 mt-4">
-                <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                  <div>
-                    <Label htmlFor="username" className="text-gray-700 font-medium">
-                      Имя пользователя
-                    </Label>
-                    <Input
-                      id="username"
-                      type="text"
-                      placeholder="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="password" className="text-gray-700 font-medium">
-                      Пароль
-                    </Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={handleLogin}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                  >
-                    Войти
-                  </Button>
-
-                  <AnimatePresence>
-                    {isAdmin && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="space-y-2 pt-4 border-t border-gray-200"
-                      >
-                        <Button
-                          onClick={handleConfigLoad}
-                          variant="outline"
-                          className="w-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                        >
-                          <Database className="w-4 h-4 mr-2" />
-                          Загрузить конфиг
-                        </Button>
-                        <Button
-                          onClick={handleLogDownload}
-                          variant="outline"
-                          className="w-full bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Скачать логи
-                        </Button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+              <CollapsibleContent>
+                <TechAccessPanel />
               </CollapsibleContent>
             </Collapsible>
           </SidebarGroupContent>
