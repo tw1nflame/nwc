@@ -70,7 +70,9 @@ COLUMN_MAPPING = {
     'p99_high': 'p99_high',
     'p99_low': 'p99_low',
     # Дата и Статья уже есть
-    
+    'predict_TABPFNMIX': 'predict_tabpfnmix',
+    'predict_TABPFNMIX разница': 'predict_tabpfnmix_diff',
+    'predict_TABPFNMIX отклонение %': 'predict_tabpfnmix_pct',
     # Для корректировок
     'Корректировка, руб': 'adjustment_value',
     'Описание': 'description',
