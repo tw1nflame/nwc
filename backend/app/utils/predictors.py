@@ -402,7 +402,7 @@ def generate_svr_predictions(
         
         # Обучение начальной модели
         train_set_df = all_models.iloc[:window].dropna(subset=columns_to_validate)
-        if train_set_df.empty:
+        if len(train_set_df) < 2: # SVR нужно хотя бы 2 точки для обучения
             continue
 
         model_win = SVR()
@@ -421,11 +421,13 @@ def generate_svr_predictions(
             window_train_df = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
             data = window_train_df.dropna(subset=columns_to_validate)
             
-            if len(data) != window:
-                raise ValueError(
-                    f'Размер данных ({len(data)}) после удаления NaN не соответствует размеру окна ({window}) '
-                    f'для даты {pred_month_end.strftime("%Y-%m-%d")}'
+            # --- ИЗМЕНЕНИЕ: Вместо ошибки - пропускаем ---
+            if len(data) < window:
+                print(
+                    f"ПРЕДУПРЕЖДЕНИЕ: Для статьи '{target_article}' в окне {window} для даты {pred_month_end.strftime('%Y-%m-%d')} "
+                    f"найдено только {len(data)} полных строк. Прогноз SVR пропущен."
                 )
+                continue # Просто переходим к следующему месяцу
             
             model = SVR()
             model.fit(data[predicts_to_use_as_features], data[target_column])
@@ -487,31 +489,9 @@ def train_linear_models_for_windows(
     date_column: str = 'Дата',
     ts_prediction_column: str = 'predict_TS_ML',
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Обучает линейные модели для различных временных окон и возвращает прогнозы и веса моделей.
-    
-    Параметры:
-        all_models: DataFrame с исходными данными и прогнозами
-        windows: Список размеров окон для обучения
-        months_to_predict: Список дат для прогнозирования
-        predicts_to_use_as_features: Список используемых признаков-прогнозов
-        target_column: Название целевой переменной
-        target_article: Название статьи для фильтрации
-        date_column: Название колонки с датой (по умолчанию 'Дата')
-        ts_prediction_column: Колонка с прогнозами временных рядов (по умолчанию 'predict_TS_ML')
-    
-    Возвращает:
-        Кортеж из:
-        1. Модифицированный DataFrame с добавленными прогнозами
-        2. DataFrame с весами моделей для каждого окна и даты
-    
-    Исключения:
-        ValueError: Если размер данных не соответствует размеру окна
-    """
 
     weights_data = []
     all_models = all_models.reset_index(drop=True)
-    # *** ИЗМЕНЕНИЕ: Определяем все столбцы для проверки на NaN ***
     columns_to_validate = [target_column] + predicts_to_use_as_features
     
     for window in windows:
@@ -519,23 +499,18 @@ def train_linear_models_for_windows(
         result_column_name = f"predict_linreg{window}_{intercept_suffix[fit_intercept]}"
         current_months_to_predict = months_to_predict[window:]
         
-        # *** ИЗМЕНЕНИЕ: Очищаем данные для начального обучения ***
         train_set = all_models.iloc[:window].dropna(subset=columns_to_validate)
         if train_set.empty:
             continue
 
-        X_train = train_set[predicts_to_use_as_features]
-        y_train = train_set[target_column]
-        
         model_win = LinearRegression(fit_intercept=fit_intercept)
-        model_win.fit(X_train, y_train)
+        model_win.fit(train_set[predicts_to_use_as_features], train_set[target_column])
         
         weights_data.append(_create_weights_dataframe(
             model_win, date=train_set.iloc[0][date_column], window=window,
             target_article=target_article, features=predicts_to_use_as_features
         ))
         
-        # *** ИЗМЕНЕНИЕ: Очищаем данные для начального прогноза ***
         X_test_clean = all_models.loc[:window-1, predicts_to_use_as_features].dropna()
         if not X_test_clean.empty:
             y_pred = model_win.predict(X_test_clean)
@@ -545,20 +520,18 @@ def train_linear_models_for_windows(
             pred_month_end = pred_month + MonthEnd(0)
             
             window_train = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
-            # *** ИЗМЕНЕНИЕ: Очищаем данные для обучения в цикле ***
             window_data = window_train.dropna(subset=columns_to_validate)
             
-            if len(window_data) != window:
-                raise ValueError(
-                    f'Несоответствие размера данных ({len(window_data)}) после удаления NaN '
-                    f'размеру окна ({window}) для {pred_month_end.strftime("%Y-%m-%d")}'
+            # --- ИЗМЕНЕНИЕ: Вместо ошибки - пропускаем ---
+            if len(window_data) < window:
+                print(
+                    f"ПРЕДУПРЕЖДЕНИЕ: Для статьи '{target_article}' в окне {window} для даты {pred_month_end.strftime('%Y-%m-%d')} "
+                    f"найдено только {len(window_data)} полных строк. Прогноз LinReg пропущен."
                 )
-            
-            X = window_data[predicts_to_use_as_features]
-            y = window_data[target_column]
-            
+                continue
+
             model = LinearRegression(fit_intercept=fit_intercept)
-            model.fit(X, y)
+            model.fit(window_data[predicts_to_use_as_features], window_data[target_column])
             
             weights_data.append(_create_weights_dataframe(
                 model, date=pred_month_end, window=window,
@@ -574,6 +547,9 @@ def train_linear_models_for_windows(
             y_pred = model.predict(X_pred)
             all_models.loc[window_pred.index, result_column_name] = y_pred
     
+    if not weights_data:
+        return all_models, pd.DataFrame()
+        
     weights_df = pd.concat(weights_data).reset_index(drop=True)
     return all_models, weights_df
 
@@ -587,37 +563,20 @@ def train_stacking_RFR_model(
     date_column: str = 'Дата',
     ts_prediction_column: str = 'predict_TS_ML',
 ) -> pd.DataFrame:
-    """
-    Обучает модель стекинга (Random Forest) на предсказаниях базовых моделей и делает прогноз.
     
-    Параметры:
-        all_models: DataFrame с исходными данными и предсказаниями базовых моделей
-        prediction_date: Дата, для которой нужно сделать прогноз
-        features_for_stacking: Список признаков для стекинга
-        target_article: Название статьи для фильтрации
-        target_column: Название целевой переменной (по умолчанию 'Fact')
-        date_column: Название колонки с датой (по умолчанию 'Дата')
-        ts_prediction_column: Колонка с прогнозами временных рядов (по умолчанию 'predict_TS_ML')
-    
-    Возвращает:
-        Модифицированный DataFrame с добавленным прогнозом модели стекинга
-    """
-    
-    # Подготовка даты прогноза
     pred_month_end = prediction_date + MonthEnd(0)
     
     train_data_full = all_models.loc[all_models[date_column] < pred_month_end]
     test_data = all_models.loc[all_models[date_column] == pred_month_end]
     
-    # *** ИЗМЕНЕНИЕ: Определяем все столбцы для проверки и очищаем данные ***
-    # Убираем колонки, не являющиеся признаками
     feature_columns = [f for f in features_for_stacking if f not in [date_column, target_column]]
     columns_to_validate = [target_column] + feature_columns
 
     train_data = train_data_full.dropna(subset=columns_to_validate)
     
     if train_data.empty:
-        raise ValueError("Нет полных данных для обучения стекинг-модели RFR. Проверьте фильтры и даты.")
+        print(f"ПРЕДУПРЕЖДЕНИЕ: Для статьи '{target_article}' нет полных данных для обучения RFR. Прогноз пропущен.")
+        return all_models # Возвращаем исходный DataFrame без изменений
     
     X_train = train_data[feature_columns]
     y_train = train_data[target_column]
