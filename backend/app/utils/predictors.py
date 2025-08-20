@@ -383,12 +383,6 @@ def generate_tabular_predictions(
     return predictions, importance_df, ensembles_df
 
 
-import pandas as pd
-from typing import List
-from datetime import datetime
-from pandas.tseries.offsets import MonthEnd
-from sklearn.svm import SVR
-
 def generate_svr_predictions(
     all_models: pd.DataFrame,
     windows: List[int],
@@ -399,54 +393,23 @@ def generate_svr_predictions(
     target_article: str,
     ts_prediction_column: str = 'predict_TS_ML'
 ) -> pd.DataFrame:
-    """
-    Обучает модели SVR для различных временных окон и делает прогнозы.
-    
-    Параметры:
-        all_models: DataFrame с исходными данными и предыдущими прогнозами
-        windows: Список размеров окон для обучения моделей
-        months_to_predict: Список дат для прогнозирования
-        predicts_to_use_as_features: Список колонок с прогнозами, используемых как признаки
-        target_column: Название целевой переменной
-        date_column: Название колонки с датой (по умолчанию 'Дата')
-        ts_prediction_column: Название колонки с прогнозами временных рядов (по умолчанию 'predict_TS_ML')
-    
-    Возвращает:
-        Модифицированный DataFrame с добавленными прогнозами для каждого окна
-    
-    Исключения:
-        ValueError: Если размер данных не соответствует размеру окна
-    """
     
     all_models = all_models.reset_index(drop=True)
-
-    # Создаем список всех колонок, которые обязательны для обучения
-    columns_to_check_for_nan = [target_column] + predicts_to_use_as_features
+    columns_to_validate = [target_column] + predicts_to_use_as_features
     
     for window in windows:
-        # Подготовка данных для текущего окна
         current_months_to_predict = months_to_predict[window:]
         
-        # Обучение начальной модели на первых WINDOW точках
-        # ИЗМЕНЕНИЕ: Используем dropna по всем нужным колонкам, а не только по таргету
-        train_set_df = all_models.iloc[:window].dropna(subset=columns_to_check_for_nan)
-        
-        # Проверяем, есть ли вообще данные для обучения
+        # Обучение начальной модели
+        train_set_df = all_models.iloc[:window].dropna(subset=columns_to_validate)
         if train_set_df.empty:
-            # Если после очистки ничего не осталось, пропускаем это окно
             continue
 
-        X_train = train_set_df[predicts_to_use_as_features]
-        y_train = train_set_df[target_column]
-        
         model_win = SVR()
-        model_win.fit(X_train, y_train)
+        model_win.fit(train_set_df[predicts_to_use_as_features], train_set_df[target_column])
         
         # Прогнозирование для начального окна
-        # Важно: здесь тоже нужно избегать NaN, иначе predict выдаст ошибку
-        X_test_initial_df = all_models.loc[:window-1, predicts_to_use_as_features]
-        # Отбираем только те строки, где нет пропусков в признаках
-        X_test_initial_clean = X_test_initial_df.dropna()
+        X_test_initial_clean = all_models.loc[:window-1, predicts_to_use_as_features].dropna()
         if not X_test_initial_clean.empty:
             y_pred = model_win.predict(X_test_initial_clean)
             all_models.loc[X_test_initial_clean.index, f"predict_svm{window}"] = y_pred
@@ -455,44 +418,27 @@ def generate_svr_predictions(
         for pred_month in current_months_to_predict:
             pred_month_end = pred_month + MonthEnd(0)
             
-            # Подготовка обучающих данных для текущего месяца
             window_train_df = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
-            window_pred_df = all_models.loc[all_models[date_column] == pred_month_end]
+            data = window_train_df.dropna(subset=columns_to_validate)
             
-            # ИЗМЕНЕНИЕ: Очищаем данные от NaN перед проверкой размера и обучением
-            data = window_train_df.dropna(subset=columns_to_check_for_nan)
-            
-            # Проверка размера окна (сохранена оригинальная логика)
-            # Если после удаления NaN данных стало меньше, чем окно, вызываем ошибку
             if len(data) != window:
                 raise ValueError(
                     f'Размер данных ({len(data)}) после удаления NaN не соответствует размеру окна ({window}) '
                     f'для даты {pred_month_end.strftime("%Y-%m-%d")}'
                 )
             
-            # Обучение и прогнозирование
-            X = data[predicts_to_use_as_features]
-            y = data[target_column]
-            
             model = SVR()
-            model.fit(X, y)
+            model.fit(data[predicts_to_use_as_features], data[target_column])
             
+            window_pred_df = all_models.loc[all_models[date_column] == pred_month_end]
             X_pred = window_pred_df[predicts_to_use_as_features]
             
-            # Проверяем, есть ли NaN в данных для предсказания
             if X_pred.isnull().values.any():
-                # Если есть, пропускаем предсказание для этого месяца, чтобы избежать ошибки
                 continue
                 
             y_pred = model.predict(X_pred)
+            all_models.loc[window_pred_df.index, f"predict_svm{window}"] = y_pred
             
-            # Сохранение результатов
-            all_models.loc[
-                (all_models[date_column] == pred_month_end) & 
-                (all_models["Статья"] == target_article),
-                f"predict_svm{window}"
-            ] = y_pred
-    
     return all_models
 
 def _create_weights_dataframe(
@@ -565,78 +511,68 @@ def train_linear_models_for_windows(
 
     weights_data = []
     all_models = all_models.reset_index(drop=True)
+    # *** ИЗМЕНЕНИЕ: Определяем все столбцы для проверки на NaN ***
+    columns_to_validate = [target_column] + predicts_to_use_as_features
     
     for window in windows:
         intercept_suffix = ("no_bias", "with_bias")
         result_column_name = f"predict_linreg{window}_{intercept_suffix[fit_intercept]}"
-
         current_months_to_predict = months_to_predict[window:]
         
-        # Обучаем начальную модель на первых window точках
-        train_set = all_models.iloc[:window].dropna(subset=[target_column])
+        # *** ИЗМЕНЕНИЕ: Очищаем данные для начального обучения ***
+        train_set = all_models.iloc[:window].dropna(subset=columns_to_validate)
+        if train_set.empty:
+            continue
+
         X_train = train_set[predicts_to_use_as_features]
         y_train = train_set[target_column]
         
         model_win = LinearRegression(fit_intercept=fit_intercept)
         model_win.fit(X_train, y_train)
         
-        # Сохраняем веса начальной модели
         weights_data.append(_create_weights_dataframe(
-            model_win, 
-            date=train_set.iloc[0][date_column],
-            window=window,
-            target_article=target_article,
-            features=predicts_to_use_as_features
+            model_win, date=train_set.iloc[0][date_column], window=window,
+            target_article=target_article, features=predicts_to_use_as_features
         ))
         
-        # Прогнозируем для начального окна
-        X_test = all_models.loc[:window-1, predicts_to_use_as_features]
-        y_pred = model_win.predict(X_test)
-        all_models.loc[:window-1, result_column_name] = y_pred
+        # *** ИЗМЕНЕНИЕ: Очищаем данные для начального прогноза ***
+        X_test_clean = all_models.loc[:window-1, predicts_to_use_as_features].dropna()
+        if not X_test_clean.empty:
+            y_pred = model_win.predict(X_test_clean)
+            all_models.loc[X_test_clean.index, result_column_name] = y_pred
         
-        # Прогнозируем для каждого последующего месяца
         for pred_month in current_months_to_predict:
             pred_month_end = pred_month + MonthEnd(0)
             
-            # Подготавливаем данные для текущего окна
-            window_train = all_models.loc[
-                all_models[date_column] < pred_month_end
-            ].iloc[-window:]
-            
-            window_data = window_train.drop(columns=[date_column]).dropna(subset=[ts_prediction_column])
+            window_train = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
+            # *** ИЗМЕНЕНИЕ: Очищаем данные для обучения в цикле ***
+            window_data = window_train.dropna(subset=columns_to_validate)
             
             if len(window_data) != window:
                 raise ValueError(
-                    f'Несоответствие размера данных ({len(window_data)}) '
+                    f'Несоответствие размера данных ({len(window_data)}) после удаления NaN '
                     f'размеру окна ({window}) для {pred_month_end.strftime("%Y-%m-%d")}'
                 )
             
-            # Обучаем и прогнозируем
             X = window_data[predicts_to_use_as_features]
             y = window_data[target_column]
             
             model = LinearRegression(fit_intercept=fit_intercept)
             model.fit(X, y)
             
-            # Сохраняем веса модели
             weights_data.append(_create_weights_dataframe(
-                model,
-                date=pred_month_end,
-                window=window,
-                target_article=target_article,
-                features=predicts_to_use_as_features
+                model, date=pred_month_end, window=window,
+                target_article=target_article, features=predicts_to_use_as_features
             ))
             
-            # Делаем прогноз
             window_pred = all_models.loc[all_models[date_column] == pred_month_end]
             X_pred = window_pred[predicts_to_use_as_features]
+
+            if X_pred.isnull().values.any():
+                continue
+
             y_pred = model.predict(X_pred)
-            
-            all_models.loc[
-                (all_models[date_column] == pred_month_end) & 
-                (all_models["Статья"] == target_article),
-                result_column_name
-            ] = y_pred
+            all_models.loc[window_pred.index, result_column_name] = y_pred
     
     weights_df = pd.concat(weights_data).reset_index(drop=True)
     return all_models, weights_df
@@ -670,29 +606,28 @@ def train_stacking_RFR_model(
     # Подготовка даты прогноза
     pred_month_end = prediction_date + MonthEnd(0)
     
-    # Разделение на обучающую и тестовую выборки
-    train_data = all_models[features_for_stacking].loc[all_models[date_column] < pred_month_end]
-    test_data = all_models[features_for_stacking].loc[all_models[date_column] == pred_month_end]
+    train_data_full = all_models.loc[all_models[date_column] < pred_month_end]
+    test_data = all_models.loc[all_models[date_column] == pred_month_end]
     
-    # Очистка и проверка данных
-    X_train = train_data.drop(columns=[date_column, target_column]).dropna(subset=[ts_prediction_column])
-    y_train = train_data.loc[X_train.index, target_column]
+    # *** ИЗМЕНЕНИЕ: Определяем все столбцы для проверки и очищаем данные ***
+    # Убираем колонки, не являющиеся признаками
+    feature_columns = [f for f in features_for_stacking if f not in [date_column, target_column]]
+    columns_to_validate = [target_column] + feature_columns
+
+    train_data = train_data_full.dropna(subset=columns_to_validate)
     
-    if len(X_train) == 0:
-        raise ValueError("Нет данных для обучения. Проверьте фильтры и даты.")
+    if train_data.empty:
+        raise ValueError("Нет полных данных для обучения стекинг-модели RFR. Проверьте фильтры и даты.")
     
-    # Обучение модели
+    X_train = train_data[feature_columns]
+    y_train = train_data[target_column]
+    
     model = RandomForestRegressor()
     model.fit(X_train, y_train)
     
-    # Прогнозирование
-    X_test = test_data.drop(columns=[date_column, target_column])
-    if not X_test.empty:
+    X_test = test_data[feature_columns]
+    if not X_test.empty and not X_test.isnull().values.any():
         y_pred = model.predict(X_test)
-        all_models.loc[
-            (all_models[date_column] == pred_month_end) &
-            (all_models["Статья"] == target_article),
-            "predict_stacking_RFR"
-        ] = y_pred
+        all_models.loc[test_data.index, "predict_stacking_RFR"] = y_pred
     
     return all_models
