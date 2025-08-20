@@ -383,6 +383,12 @@ def generate_tabular_predictions(
     return predictions, importance_df, ensembles_df
 
 
+import pandas as pd
+from typing import List
+from datetime import datetime
+from pandas.tseries.offsets import MonthEnd
+from sklearn.svm import SVR
+
 def generate_svr_predictions(
     all_models: pd.DataFrame,
     windows: List[int],
@@ -413,12 +419,23 @@ def generate_svr_predictions(
     """
     
     all_models = all_models.reset_index(drop=True)
+
+    # Создаем список всех колонок, которые обязательны для обучения
+    columns_to_check_for_nan = [target_column] + predicts_to_use_as_features
+    
     for window in windows:
         # Подготовка данных для текущего окна
         current_months_to_predict = months_to_predict[window:]
         
         # Обучение начальной модели на первых WINDOW точках
-        train_set_df = all_models.iloc[:window].dropna(subset=[target_column])
+        # ИЗМЕНЕНИЕ: Используем dropna по всем нужным колонкам, а не только по таргету
+        train_set_df = all_models.iloc[:window].dropna(subset=columns_to_check_for_nan)
+        
+        # Проверяем, есть ли вообще данные для обучения
+        if train_set_df.empty:
+            # Если после очистки ничего не осталось, пропускаем это окно
+            continue
+
         X_train = train_set_df[predicts_to_use_as_features]
         y_train = train_set_df[target_column]
         
@@ -426,9 +443,13 @@ def generate_svr_predictions(
         model_win.fit(X_train, y_train)
         
         # Прогнозирование для начального окна
-        X_test = all_models.loc[:window-1, predicts_to_use_as_features]
-        y_pred = model_win.predict(X_test)
-        all_models.loc[:window-1, f"predict_svm{window}"] = y_pred
+        # Важно: здесь тоже нужно избегать NaN, иначе predict выдаст ошибку
+        X_test_initial_df = all_models.loc[:window-1, predicts_to_use_as_features]
+        # Отбираем только те строки, где нет пропусков в признаках
+        X_test_initial_clean = X_test_initial_df.dropna()
+        if not X_test_initial_clean.empty:
+            y_pred = model_win.predict(X_test_initial_clean)
+            all_models.loc[X_test_initial_clean.index, f"predict_svm{window}"] = y_pred
         
         # Прогнозирование для каждого месяца
         for pred_month in current_months_to_predict:
@@ -438,11 +459,14 @@ def generate_svr_predictions(
             window_train_df = all_models.loc[all_models[date_column] < pred_month_end].iloc[-window:]
             window_pred_df = all_models.loc[all_models[date_column] == pred_month_end]
             
-            # Проверка размера окна
-            data = window_train_df.drop(columns=[date_column]).dropna(subset=[ts_prediction_column])
+            # ИЗМЕНЕНИЕ: Очищаем данные от NaN перед проверкой размера и обучением
+            data = window_train_df.dropna(subset=columns_to_check_for_nan)
+            
+            # Проверка размера окна (сохранена оригинальная логика)
+            # Если после удаления NaN данных стало меньше, чем окно, вызываем ошибку
             if len(data) != window:
                 raise ValueError(
-                    f'Размер данных ({len(data)}) не соответствует размеру окна ({window}) '
+                    f'Размер данных ({len(data)}) после удаления NaN не соответствует размеру окна ({window}) '
                     f'для даты {pred_month_end.strftime("%Y-%m-%d")}'
                 )
             
@@ -454,6 +478,12 @@ def generate_svr_predictions(
             model.fit(X, y)
             
             X_pred = window_pred_df[predicts_to_use_as_features]
+            
+            # Проверяем, есть ли NaN в данных для предсказания
+            if X_pred.isnull().values.any():
+                # Если есть, пропускаем предсказание для этого месяца, чтобы избежать ошибки
+                continue
+                
             y_pred = model.predict(X_pred)
             
             # Сохранение результатов

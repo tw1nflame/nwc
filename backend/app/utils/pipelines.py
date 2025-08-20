@@ -197,6 +197,7 @@ def run_base_plus_pipeline(
     #     metric=METRIC.lower(),
     #     models_to_use=TABPFNMIX_model
     # )
+    #
     # predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
 
         # ----------------------------------
@@ -207,7 +208,7 @@ def run_base_plus_pipeline(
 
         all_models = reduce(
             lambda left, right: pd.merge(left, right, on=[DATE_COLUMN], how="outer"),
-            [fact, naive_predict, predict_TS_ML, predict_ML_tabular]
+            [fact, naive_predict, predict_TS_ML, predict_ML_tabular]  # predict_TABPFNMIX отключен
         )
         all_models["Статья"] = TARGET_COLUMN
 
@@ -265,7 +266,7 @@ def run_base_plus_pipeline(
         predicts_to_use_as_features = [
             'predict_naive',
             'predict_TS_ML',
-            'predict_ML_tabular'
+            'predict_ML_tabular',
             # 'predict_TABPFNMIX'  # отключено
         ]
 
@@ -327,7 +328,7 @@ def run_base_plus_pipeline(
             'predict_naive',
             'predict_TS_ML',
             'predict_ML_tabular',
-            # 'predict_TABPFNMIX',
+            'predict_TABPFNMIX',
             'predict_svm9',
             'predict_linreg9_no_bias',
             'Fact'          # not used while training
