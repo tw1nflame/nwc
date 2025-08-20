@@ -186,19 +186,18 @@ def run_base_plus_pipeline(
         DF_FEATURE_IMPORTANCE['Статья'] = TARGET_COLUMN
         DF_TABULAR_ENSEMBL_INFO['Статья'] = TARGET_COLUMN
 
-        # ----------------------------------
-        # Предикт TABPFNMIX | BASE+
-        # ----------------------------------
-        predict_TABPFNMIX, _, _ = generate_tabular_predictions(
-            df_tabular=df_tabular,
-            target_column=TARGET_COLUMN,
-            date_column=DATE_COLUMN,
-            months_to_predict=[CHOSEN_MONTH],
-            metric=METRIC.lower(),
-            models_to_use=TABPFNMIX_model
-        )
-
-        predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
+    # ----------------------------------
+    # Предикт TABPFNMIX | BASE+ (отключено)
+    # ----------------------------------
+    # predict_TABPFNMIX, _, _ = generate_tabular_predictions(
+    #     df_tabular=df_tabular,
+    #     target_column=TARGET_COLUMN,
+    #     date_column=DATE_COLUMN,
+    #     months_to_predict=[CHOSEN_MONTH],
+    #     metric=METRIC.lower(),
+    #     models_to_use=TABPFNMIX_model
+    # )
+    # predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
 
         # ----------------------------------
         # Формирование итогового файла с результатами предиктов | BASE+
@@ -208,7 +207,7 @@ def run_base_plus_pipeline(
 
         all_models = reduce(
             lambda left, right: pd.merge(left, right, on=[DATE_COLUMN], how="outer"),
-            [fact, naive_predict, predict_TS_ML, predict_ML_tabular, predict_TABPFNMIX]
+            [fact, naive_predict, predict_TS_ML, predict_ML_tabular]
         )
         all_models["Статья"] = TARGET_COLUMN
 
@@ -266,8 +265,8 @@ def run_base_plus_pipeline(
         predicts_to_use_as_features = [
             'predict_naive',
             'predict_TS_ML',
-            'predict_ML_tabular',
-            'predict_TABPFNMIX'
+            'predict_ML_tabular'
+            # 'predict_TABPFNMIX'  # отключено
         ]
 
         all_models = generate_svr_predictions(
@@ -328,7 +327,7 @@ def run_base_plus_pipeline(
             'predict_naive',
             'predict_TS_ML',
             'predict_ML_tabular',
-            'predict_TABPFNMIX',
+            # 'predict_TABPFNMIX',
             'predict_svm9',
             'predict_linreg9_no_bias',
             'Fact'          # not used while training

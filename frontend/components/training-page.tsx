@@ -224,7 +224,7 @@ function FileInput({
   )
 }
 
-function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onClearStatus?: () => void }) {
+function StatusIndicator({ trainStatus, onClearStatus, accessToken }: { trainStatus: any; onClearStatus?: () => void; accessToken?: string }) {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "running":
@@ -275,6 +275,7 @@ function StatusIndicator({ trainStatus, onClearStatus }: { trainStatus: any; onC
   const Icon = config.icon
 
   const handleClearStatus = async () => {
+    if (!accessToken) return;
     await clearTrainStatus(accessToken)
     onClearStatus && onClearStatus()
   }
@@ -367,12 +368,14 @@ function PredictForm({
   trainStatus,
   onStop,
   onClearStatus,
+  accessToken,
 }: {
   config: any
   onSubmit?: (data: any) => void
   trainStatus: any
   onStop?: () => void
   onClearStatus?: () => void
+  accessToken?: string
 }) {
   const [pipeline, setPipeline] = useState("BASE")
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -404,8 +407,6 @@ function PredictForm({
     onSubmit && onSubmit({ pipeline, selectedItems, date, dataFile })
   }
 
-  const { session } = useAuth();
-  const accessToken = session?.access_token;
 
   const handleStop = async () => {
     await stopTrainTask(accessToken)
@@ -545,7 +546,7 @@ function PredictForm({
             </div>
 
             {/* Status Display */}
-            <StatusIndicator trainStatus={trainStatus} onClearStatus={onClearStatus} />
+            <StatusIndicator trainStatus={trainStatus} onClearStatus={onClearStatus} accessToken={accessToken} />
 
             {/* Stop Button */}
             <AnimatePresence>
@@ -635,7 +636,7 @@ export default function TrainingPage() {
         <p className="text-gray-600 text-lg">Настройка и запуск процесса обучения модели прогнозирования</p>
       </motion.div>
 
-      {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} onStop={handleStop} onClearStatus={handleClearStatus} />}
+  {config && <PredictForm config={config} onSubmit={handleTrainSubmit} trainStatus={trainStatus} onStop={handleStop} onClearStatus={handleClearStatus} accessToken={accessToken} />}
     </main>
   )
 }

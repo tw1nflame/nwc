@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+
+  backend:
+    build:
+      context: ./backend
+    container_name: nwc-backend
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - redis
+      - supabase
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config_refined.yaml:/app/config_refined.yaml
+
+  celery:
+    build:
+      context: ./backend
+    container_name: nwc-celery
+    command: celery -A app.tasks worker --pool=prefork --loglevel=info
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+      - redis
+      - supabase
+    volumes:
+      - ./config_refined.yaml:/app/config_refined.yaml
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: nwc-frontend
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: nwc-redis
+    ports:
+      - "6379:6379"
+
+  supabase:
+    image: supabase/postgres:15.1.0.63
+    container_name: nwc-supabase
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: nwc
+    ports:
+      - "5432:5432"
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+
+volumes:
+  supabase-data:
