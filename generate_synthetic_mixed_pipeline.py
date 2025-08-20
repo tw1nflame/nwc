@@ -58,10 +58,10 @@ BASE_COLS = [
 # Колонки BASE+
 BASEPLUS_COLS = [
     'predict_naive',
-    'predict_TS_ML', 'predict_TS_tabular', 'predict_svm6', 'predict_svm9', 'predict_svm12',
+    'predict_TS_ML', 'predict_ML_tabular', 'predict_svm6', 'predict_svm9', 'predict_svm12',
     'predict_linreg6_with_bias', 'predict_linreg9_with_bias', 'predict_linreg12_with_bias',
     'predict_linreg6_no_bias', 'predict_linreg9_no_bias', 'predict_linreg12_no_bias',
-    'predict_stacking_RFR'
+    'predict_stacking_RFR', 'predict_TABPFNMIX'
 ]
 
 # Объединение всех возможных predict-колонок
