@@ -47,7 +47,7 @@ SHEET_TO_TABLE = {
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config_refined.yaml'))
 
-def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_value: str = None, date_column: str = None):
+def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_value: str = None, date_column: str = None, pipeline: str = None):
     """
     Загружает все листы результата pipeline (BASE или BASE+) в соответствующие таблицы PostgreSQL через psycopg2.
     Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют, 
@@ -100,15 +100,24 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
             table = sheet_to_table.get(sheet)
             if table and processed_articles:
                 # Проверяем, есть ли в таблице колонка article
-                cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = 'article'")
-                if cur.fetchone():
-                    # Удаляем данные только по обработанным статьям
+                cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'article'", (table,))
+                has_article = cur.fetchone() is not None
+                # Проверяем, есть ли колонка pipeline
+                has_pipeline = False
+                if pipeline:
+                    cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'pipeline'", (table,))
+                    has_pipeline = cur.fetchone() is not None
+                if has_article:
                     placeholders = ', '.join(['%s'] * len(processed_articles))
-                    delete_query = f'DELETE FROM {table} WHERE "article" IN ({placeholders})'
-                    cur.execute(delete_query, processed_articles)
+                    if pipeline and has_pipeline:
+                        delete_query = f'DELETE FROM {table} WHERE "article" IN ({placeholders}) AND pipeline = %s'
+                        cur.execute(delete_query, processed_articles + [pipeline])
+                    else:
+                        delete_query = f'DELETE FROM {table} WHERE "article" IN ({placeholders})'
+                        cur.execute(delete_query, processed_articles)
                     deleted_rows = cur.rowcount
                     deleted_rows_total += deleted_rows
-                    logger.info(f"Удалено {deleted_rows} строк из таблицы {table} для статей: {processed_articles}")
+                    logger.info(f"Удалено {deleted_rows} строк из таблицы {table} для статей: {processed_articles} (pipeline={pipeline if has_pipeline else 'any'})")
                 else:
                     # Если нет колонки article, очищаем всю таблицу (для совместимости)
                     cur.execute(f'TRUNCATE TABLE {table} RESTART IDENTITY CASCADE')
@@ -128,48 +137,59 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
             if df.empty:
                 logger.warning(f"Лист '{sheet}' пуст")
                 continue
-            
+
             logger.info(f"Обработка листа '{sheet}' -> таблица '{table}', строк: {len(df)}")
             logger.info(f"Форма DataFrame: {df.shape} (строки x колонки)")
             logger.info(f"Исходные колонки ({len(df.columns)}): {list(df.columns)}")
-            
+
             # Применяем маппинг колонок из Excel в БД
             original_columns = df.columns.tolist()
             df.columns = [COLUMN_MAPPING.get(col, col) for col in df.columns]
             mapped_columns = df.columns.tolist()
             logger.debug(f"Маппинг колонок для {sheet}: {dict(zip(original_columns, mapped_columns))}")
             logger.info(f"Колонки после маппинга ({len(df.columns)}): {list(df.columns)}")
-            
-            columns = ', '.join([f'"{col}"' for col in df.columns])
-            values_template = ', '.join(['%s'] * len(df.columns))
+
+            # Проверяем, есть ли колонка pipeline в таблице
+            has_pipeline = False
+            if pipeline:
+                cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'pipeline'", (table,))
+                has_pipeline = cur.fetchone() is not None
+            df_to_insert = df.copy()
+            if pipeline and has_pipeline:
+                if 'pipeline' not in df_to_insert.columns:
+                    df_to_insert['pipeline'] = pipeline
+                else:
+                    df_to_insert['pipeline'] = pipeline
+            columns = ', '.join([f'"{col}"' for col in df_to_insert.columns])
+            values_template = ', '.join(['%s'] * len(df_to_insert.columns))
             insert_query = f'INSERT INTO {table} ({columns}) VALUES ({values_template})'
-            
+
             logger.info(f"SQL запрос: {insert_query}")
-            logger.info(f"Ожидается {len(df.columns)} значений, колонки: {list(df.columns)}")
-            
-            records = df.values.tolist()
+            logger.info(f"Ожидается {len(df_to_insert.columns)} значений, колонки: {list(df_to_insert.columns)}")
+
+            records = df_to_insert.values.tolist()
             logger.info(f"Первые 3 строки данных:")
             for i, row in enumerate(records[:3]):
                 logger.info(f"  Строка {i+1}: {len(row)} значений - {row}")
-            
+
             inserted_rows = 0
             for i, row in enumerate(records):
                 try:
-                    if len(row) != len(df.columns):
+                    if len(row) != len(df_to_insert.columns):
                         logger.error(f"Несоответствие количества значений в строке {i+1}:")
-                        logger.error(f"  Ожидается: {len(df.columns)} значений")
+                        logger.error(f"  Ожидается: {len(df_to_insert.columns)} значений")
                         logger.error(f"  Получено: {len(row)} значений")
-                        logger.error(f"  Колонки ({len(df.columns)}): {list(df.columns)}")
+                        logger.error(f"  Колонки ({len(df_to_insert.columns)}): {list(df_to_insert.columns)}")
                         logger.error(f"  Значения ({len(row)}): {row}")
-                        raise ValueError(f"Количество значений ({len(row)}) не соответствует количеству колонок ({len(df.columns)})")
-                    
+                        raise ValueError(f"Количество значений ({len(row)}) не соответствует количеству колонок ({len(df_to_insert.columns)})")
+
                     cur.execute(insert_query, row)
                     inserted_rows += 1
                 except Exception as e:
                     logger.error(f"Ошибка вставки строки {i+1} в таблицу {table}: {e}")
                     logger.error(f"Данные строки: {row}")
                     raise
-            
+
             inserted_rows_total += inserted_rows
             logger.info(f"Вставлено {inserted_rows} строк в таблицу {table}")
         
@@ -177,23 +197,6 @@ def upload_pipeline_result_to_db(file_path: str, sheet_to_table: dict, date_valu
         conn.commit()
         logger.info("Транзакция успешно завершена")
         
-        # Если листы Tabular_ensemble_models_info или Tabular_feature_importance отсутствуют,
-        # удаляем данные по указанной дате из соответствующих таблиц
-        if date_value and date_column:
-            # Преобразуем имя столбца из Excel в имя столбца БД
-            db_date_column = COLUMN_MAPPING.get(date_column, date_column)
-            tabular_sheets_to_check = ['Tabular_ensemble_models_info', 'Tabular_feature_importance']
-            for sheet_name in tabular_sheets_to_check:
-                if sheet_name not in xls:  # Лист отсутствует в Excel
-                    table = sheet_to_table.get(sheet_name)
-                    if table:
-                        # Удаляем данные по дате из таблицы, используя правильное имя столбца БД
-                        delete_by_date_query = f'DELETE FROM {table} WHERE "{db_date_column}" = %s'
-                        cur.execute(delete_by_date_query, (date_value,))
-                        deleted_by_date = cur.rowcount
-                        logger.info(f"Удалено {deleted_by_date} строк из таблицы {table} по дате {date_value}")
-            conn.commit()
-            logger.info("Дополнительная очистка по дате завершена")
         
         cur.close()
         logger.info("Загрузка результатов пайплайна в БД завершена успешно")
@@ -225,7 +228,20 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, 
     # Преобразуем имя столбца из Excel в имя столбца БД
     db_date_column = COLUMN_MAPPING.get(date_column, date_column)
     logger.info(f"Маппинг колонки: {date_column} -> {db_date_column}")
-    
+
+    # Load config to get USD articles
+    config = load_config(CONFIG_PATH)
+    usd_articles = config.get('Статьи для предикта в USD', [])
+
+    # Prepare articles_processed with _USD if needed
+    articles_for_update = None
+    if articles_processed:
+        articles_for_update = [
+            (a + '_USD') if a in usd_articles else a
+            for a in articles_processed
+        ]
+        logger.info(f"Статьи для обновления (с учетом USD): {articles_for_update}")
+
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -234,41 +250,41 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, 
         dbname=DB_NAME
     )
     logger.info(f"Подключение к БД для установки pipeline: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-    
+
     try:
         cur = conn.cursor()
-        
+
         # Обновляем pipeline для записей по дате и статьям
         # Преобразуем дату в последний день месяца для сравнения
         last_day_of_month = pd.to_datetime(date_value) + pd.offsets.MonthEnd(0)
         last_day_date = last_day_of_month.date()
-        
-        if articles_processed:
+
+        if articles_for_update:
             # Если указаны конкретные статьи, обновляем только их для последнего дня месяца
-            placeholders = ','.join(['%s'] * len(articles_processed))
+            placeholders = ','.join(['%s'] * len(articles_for_update))
             query = f"""
             UPDATE {table}
             SET pipeline = %s
-            WHERE DATE("{db_date_column}") = %s
+            WHERE DATE(\"{db_date_column}\") = %s
             AND article IN ({placeholders})
             """
-            cur.execute(query, [pipeline_value, last_day_date] + articles_processed)
+            cur.execute(query, [pipeline_value, last_day_date] + articles_for_update)
         else:
             # Обновляем все записи для последнего дня месяца
             query = f"""
             UPDATE {table}
             SET pipeline = %s
-            WHERE DATE("{db_date_column}") = %s
+            WHERE DATE(\"{db_date_column}\") = %s
             """
             cur.execute(query, (pipeline_value, last_day_date))
-        
+
         rows_affected = cur.rowcount
         logger.info(f"Выполнен UPDATE в таблице {table}: {rows_affected} строк обновлено")
-        
+
         conn.commit()
         logger.info("Изменения pipeline зафиксированы в БД")
         cur.close()
-        
+
     except Exception as e:
         logger.error(f"Ошибка при установке pipeline колонки: {e}", exc_info=True)
         conn.rollback()
@@ -530,17 +546,18 @@ def process_adjustments_file(file_path: str, date_column: str = 'Дата'):
         conn.close()
         logger.info("Соединение с БД для корректировок закрыто")
 
-def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False) -> BytesIO:
+def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction: bool = False, pipeline: str = None) -> BytesIO:
     """
-    [DEPRECATED] Используйте collect_pipeline_tables_data и dataframes_to_excel
+    Экспортирует таблицы pipeline в Excel. Если указан pipeline ('base' или 'base+'), фильтрует строки по этому значению в столбце pipeline.
     """
-    dataframes_dict = collect_pipeline_tables_data(sheet_to_table, make_final_prediction)
+    dataframes_dict = collect_pipeline_tables_data(sheet_to_table, make_final_prediction, pipeline)
     return dataframes_to_excel(dataframes_dict)
 
 
-def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bool = False) -> dict:
+def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bool = False, pipeline: str = None) -> dict:
     """
     Собирает все таблицы из sheet_to_table и связанные данные в dict датафреймов.
+    Если указан pipeline, фильтрует строки по этому значению в столбце pipeline (если такой столбец есть в таблице).
     """
     logger = setup_custom_logging()
     logger.info(f"Начало сбора таблиц. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
@@ -561,7 +578,10 @@ def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bo
         # Финальный прогноз
         if make_final_prediction:
             logger.info("Создание финального предсказания")
-            df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
+            if pipeline:
+                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE pipeline = %s', conn, params=(pipeline,))
+            else:
+                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
             logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
             try:
                 df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', conn)
@@ -626,7 +646,14 @@ def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bo
                 logger.warning(f"Пропуск листа {sheet}: таблица не указана")
                 continue
             logger.info(f"Экспорт таблицы {table} в лист {sheet}")
-            df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
+            # Проверяем, есть ли колонка pipeline в таблице
+            cur = conn.cursor()
+            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'pipeline'", (table,))
+            has_pipeline = cur.fetchone() is not None
+            if pipeline and has_pipeline:
+                df = pd.read_sql_query(f'SELECT * FROM {table} WHERE pipeline = %s', conn, params=(pipeline,))
+            else:
+                df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
             original_columns = list(df.columns)
             df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
             mapped_columns = list(df.columns)
@@ -692,7 +719,7 @@ def dataframes_to_excel(dataframes_dict: dict) -> BytesIO:
     finally:
         os.remove(tmp.name)
 
-def get_article_stats_excel(article_name: str) -> BytesIO:
+def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
     """
     Вычисляет статистику по одной статье и возвращает Excel-файл в памяти.
     """
@@ -703,7 +730,6 @@ def get_article_stats_excel(article_name: str) -> BytesIO:
         article_name_db = article_name
         if article_name in usd_articles:
             article_name_db = f"{article_name}_USD"
-    # ...
         # Создаем SQLAlchemy engine для pandas
         db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
         engine = create_engine(db_url)
@@ -714,12 +740,13 @@ def get_article_stats_excel(article_name: str) -> BytesIO:
             password=DB_PASSWORD,
             dbname=DB_NAME
         )
-    # ...
-        df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
-    # ...
+        # Фильтрация по pipeline если задан
+        if pipeline:
+            df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s AND pipeline = %s', engine, params=(article_name_db, pipeline))
+        else:
+            df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
         if df.empty:
-            # ...
-            raise ValueError(f"Нет данных для статьи: {article_name}")
+            raise ValueError(f"Нет данных для статьи: {article_name} (pipeline={pipeline})")
         # ...existing code...
         # (rest of the function remains unchanged)
     except Exception as e:

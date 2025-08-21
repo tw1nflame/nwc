@@ -61,7 +61,13 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
     
     # Создаем файл с данными из БД для использования в pipeline
     prev_path = os.path.join(TRAINING_FILES_DIR, f"prev_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
-    output = export_pipeline_tables_to_excel(SHEET_TO_TABLE)
+    # Передаем pipeline ('base' или 'base+') в функцию экспорта
+    pipeline_arg = None
+    if pipeline == "BASE+":
+        pipeline_arg = 'base+'
+    elif pipeline == "BASE":
+        pipeline_arg = 'base'
+    output = export_pipeline_tables_to_excel(SHEET_TO_TABLE, pipeline=pipeline_arg)
     with open(prev_path, "wb") as f:
         f.write(output.getvalue())
     logger.info(f"Создан файл предыдущих данных: {prev_path}")
@@ -87,8 +93,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
                 status_manager=training_status_manager
             )
             logger.info("BASE+ пайплайн завершен, загрузка в БД")
-            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
-            set_pipeline_column(DATE_COLUMN, date, 'BASE+', list(ITEMS_TO_PREDICT.keys()))
+            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN, pipeline='base+')
             logger.info("Данные BASE+ загружены в БД")
             
         elif pipeline == "BASE":
@@ -110,8 +115,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
                 status_manager=training_status_manager
             )
             logger.info("BASE пайплайн завершен, загрузка в БД")
-            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN)
-            set_pipeline_column(DATE_COLUMN, date, 'BASE', list(ITEMS_TO_PREDICT.keys()))
+            upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN, pipeline='base')
             logger.info("Данные BASE загружены в БД")
         
         # НЕ очищаем прогресс при успешном завершении - оставляем task_id

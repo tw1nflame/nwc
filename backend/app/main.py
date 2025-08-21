@@ -225,13 +225,13 @@ async def upload_adjustments(
     
 @app.get("/export_article_stats/")
 @require_authentication
-async def export_article_stats(request: Request, article: str = Query(..., description="Название статьи")):
+async def export_article_stats(request: Request, article: str = Query(..., description="Название статьи"), pipeline: str = Query(None, description="Pipeline (base/base+)") ):
     """
     Всегда возвращает Excel-файл со статистикой по статье.
     Фронт может либо скачать, либо распарсить его для отображения.
     """
     try:
-        excel_bytes = get_article_stats_excel(article)
+        excel_bytes = get_article_stats_excel(article, pipeline=pipeline)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     filename = f"article_stats_{article}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"

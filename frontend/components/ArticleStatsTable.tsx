@@ -10,10 +10,11 @@ interface ArticleStatsTableProps {
   exchangeRatesJson: any[];
   parsedJson: any[];
   config: any;
+  pipeline: 'base' | 'base+';
 }
 
 
-export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, currency, exchangeRatesJson, parsedJson, config }) => {
+export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, currency, exchangeRatesJson, parsedJson, config, pipeline }) => {
   const { session } = useAuth();
   const accessToken = session?.access_token;
   const [rawStats, setRawStats] = useState<any[][] | null>(null);
@@ -71,14 +72,14 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
     if (!article) return;
     setLoading(true);
     setError(null);
-    fetchArticleStatsExcel(article, accessToken)
+    fetchArticleStatsExcel(article, accessToken, pipeline)
       .then(({ columns, stats }) => {
         setRawColumns(columns);
         setRawStats(stats);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [article, accessToken]);
+  }, [article, accessToken, pipeline]);
 
   // Фильтрация столбцов под выбранную валюту: показываем только (RUB) или (USD) + проценты
   const { columns, stats } = React.useMemo(() => {

@@ -199,6 +199,7 @@ export function AnalysisPage() {
   const [showFullTable, setShowFullTable] = useState(false)
   const [forecastType, setForecastType] = useState<'original' | 'corrected'>('original')
   const [currency, setCurrency] = useState<'RUB' | 'USD'>('RUB')
+  const [pipeline, setPipeline] = useState<'base' | 'base+'>('base')
   const {
     excelBuffer,
     setExcelBuffer,
@@ -338,6 +339,8 @@ export function AnalysisPage() {
         const val = row["Статья"];
         if (!val) return false;
         const rowArticleName = val.trim().toLowerCase();
+        const rowPipeline = (row["pipeline"] ?? '').toLowerCase();
+        if (rowPipeline !== pipeline) return false;
         if (isUsdArticle) {
           return rowArticleName === selectedArticleLower || rowArticleName === selectedArticleLower + '_usd';
         } else {
@@ -436,7 +439,7 @@ export function AnalysisPage() {
       setChartData([]);
     }
     setTimeout(() => setChartLoading(false), 300);
-  }, [selectedArticle, selectedModels, parsedJson, currency, exchangeRatesJson, config]);
+  }, [selectedArticle, selectedModels, parsedJson, currency, exchangeRatesJson, config, pipeline]);
 
 
   return (
@@ -489,7 +492,7 @@ export function AnalysisPage() {
                   </Select>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
@@ -546,6 +549,30 @@ export function AnalysisPage() {
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
                       />
                       <span className="text-sm text-gray-700">USD</span>
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pipeline"
+                        value="base"
+                        checked={pipeline === 'base'}
+                        onChange={(e) => setPipeline(e.target.value as 'base' | 'base+')}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">base</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pipeline"
+                        value="base+"
+                        checked={pipeline === 'base+'}
+                        onChange={(e) => setPipeline(e.target.value as 'base' | 'base+')}
+                        className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">base+</span>
                     </label>
                   </div>
                 </div>
@@ -657,6 +684,7 @@ export function AnalysisPage() {
                         exchangeRatesJson={exchangeRatesJson}
                         parsedJson={parsedJson}
                         config={config}
+                        pipeline={pipeline}
                       />
                     )}
                   </Card>
