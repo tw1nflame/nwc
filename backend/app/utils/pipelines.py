@@ -360,7 +360,13 @@ def run_base_plus_pipeline(
         linreg_no_intercept_weights_dfs.append(LINREG_NO_INTERCEPT_WEIGHTS_DF)
         ensemble_info_dfs.append(DF_ENSMBLE_INFO)
         tabular_ensemble_info_dfs.append(DF_TABULAR_ENSEMBL_INFO)
-        feature_importance_dfs.append(DF_FEATURE_IMPORTANCE.astype(prev_feature_imp.dtypes)) # bug fix for GH55067
+        # Приводим типы только по пересечению столбцов, чтобы избежать KeyError
+        common_cols = [col for col in prev_feature_imp.dtypes.index if col in DF_FEATURE_IMPORTANCE.columns]
+        if common_cols:
+            dtypes_to_apply = {col: prev_feature_imp.dtypes[col] for col in common_cols}
+            feature_importance_dfs.append(DF_FEATURE_IMPORTANCE.astype(dtypes_to_apply))
+        else:
+            feature_importance_dfs.append(DF_FEATURE_IMPORTANCE)
 
 
     # concats
