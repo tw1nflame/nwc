@@ -1131,10 +1131,12 @@ def get_bullet_chart_data() -> dict:
         # Приводим все имена колонок к нижнему регистру для унификации поиска
         df.columns = [col.lower() for col in df.columns]
         result = []
+        pipeline_articles = {}
         for idx, row in df.iterrows():
             row_dict = {k.lower(): v for k, v in row.items()}
             article = row_dict.get('статья')
             date = row_dict.get('дата')
+            pipeline_val = row_dict.get('pipeline')
             base_article = article
             if article and article.endswith('_USD'):
                 base_article = article[:-4]
@@ -1159,17 +1161,25 @@ def get_bullet_chart_data() -> dict:
                     return f
                 except Exception:
                     return None
-                
+
             # Если статья в USD, возвращаем без _USD
             article_for_front = article[:-4] if article and article.endswith('_USD') else article
+            # Сбор уникальных статей по pipeline
+            if pipeline_val not in pipeline_articles:
+                pipeline_articles[pipeline_val] = set()
+            pipeline_articles[pipeline_val].add(article_for_front)
             result.append({
                 'article': article_for_front,
                 'model': model,
                 'date': date_str,
                 'deviation': safe_float(deviation),
                 'difference': safe_float(difference),
-                'pipeline': row_dict.get('pipeline')
+                'pipeline': pipeline_val
             })
+        # Логгирование: какие статьи есть для каждого pipeline
+        print("[BULLET PIPELINE ARTICLES]")
+        for pipe, arts in pipeline_articles.items():
+            print(f"  pipeline={pipe}: {sorted(arts)}")
         # Получить курсы валют
         try:
             if not EXCHANGE_RATE_TABLE:

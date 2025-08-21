@@ -14,13 +14,15 @@ export interface BulletChartProps {
     difference: number;
     model?: string;
     date?: string;
+    pipeline?: 'base' | 'base+';
   }>;
   loading?: boolean;
   currency?: 'RUB' | 'USD';
   exchangeRates?: any[];
+  pipeline?: 'base' | 'base+';
 }
 
-export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, currency = 'RUB', exchangeRates = [] }) => {
+export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, currency = 'RUB', exchangeRates = [], pipeline = 'base' }) => {
   const { config } = useConfig();
   const usdArticles: string[] = config?.['Статьи для предикта в USD'] || [];
   // Получаем лимиты из config для выбранной валюты
@@ -68,7 +70,7 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
   }
   const filteredData = Array.isArray(data)
     ? data.filter(
-        d => typeof d.deviation === 'number' && !isNaN(d.deviation) && typeof d.difference === 'number' && !isNaN(d.difference)
+        d => typeof d.deviation === 'number' && !isNaN(d.deviation) && typeof d.difference === 'number' && !isNaN(d.difference) && d.pipeline === pipeline
       ).map(d => {
         // deviation всегда в %, не конвертируется, но логгируем для контроля
         const converted = {
@@ -76,7 +78,6 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
           difference: convertDifference(d.difference, d.date, d.article),
           deviation: d.deviation // для логгирования
         };
-  // ...
         return converted;
       })
     : [];

@@ -23,6 +23,7 @@ export function AnalyticsPage() {
     currency,
     setCurrency
   } = useAnalyticsContext();
+  const [pipeline, setPipeline] = React.useState<'base' | 'base+'>('base');
   const { session } = useAuth();
   React.useEffect(() => {
     if (bulletChartData.length > 0 && exchangeRates.length > 0) {
@@ -74,6 +75,25 @@ export function AnalyticsPage() {
       return true;
     });
   }, [bulletChartData, startMonth, endMonth]);
+
+  // Логгирование всех данных для bullet-графика до фильтрации по pipeline
+  React.useEffect(() => {
+    if (bulletChartData && bulletChartData.length > 0) {
+      // eslint-disable-next-line no-console
+      const allArticles = Array.from(new Set(bulletChartData.map(d => d.article)));
+      console.log('[BULLET RAW DATA]', bulletChartData);
+      console.log('[BULLET ALL ARTICLES]', allArticles);
+    }
+  }, [bulletChartData]);
+
+  React.useEffect(() => {
+    if (bulletChartData && bulletChartData.length > 0 && pipeline) {
+      const filtered = bulletChartData.filter(d => d.pipeline === pipeline);
+      const filteredArticles = Array.from(new Set(filtered.map(d => d.article)));
+      // eslint-disable-next-line no-console
+      console.log(`[BULLET FILTERED ARTICLES for pipeline=${pipeline}]`, filteredArticles);
+    }
+  }, [bulletChartData, pipeline]);
 
   return (
     <main className="flex-1 p-8">
@@ -136,6 +156,30 @@ export function AnalyticsPage() {
               />
               <span>USD</span>
             </label>
+            <span className="mx-2">|</span>
+            <label className="font-medium">Пайплайн</label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="pipeline"
+                value="base"
+                checked={pipeline === 'base'}
+                onChange={() => setPipeline('base')}
+                className="accent-blue-600"
+              />
+              <span>base</span>
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="pipeline"
+                value="base+"
+                checked={pipeline === 'base+'}
+                onChange={() => setPipeline('base+')}
+                className="accent-blue-600"
+              />
+              <span>base+</span>
+            </label>
           </div>
         </div>
       </div>
@@ -145,7 +189,7 @@ export function AnalyticsPage() {
           <div className="text-lg text-gray-500">Загрузка данных...</div>
         </div>
       ) : (
-  <BulletChartCard data={filteredData} currency={currency} exchangeRates={exchangeRates} />
+  <BulletChartCard data={filteredData} currency={currency} exchangeRates={exchangeRates} pipeline={pipeline} />
       )}
     </main>
   );
