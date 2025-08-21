@@ -368,6 +368,9 @@ def run_base_plus_pipeline(
         else:
             feature_importance_dfs.append(DF_FEATURE_IMPORTANCE)
 
+        # Обновляем счетчик обработанных статей (теперь внутри цикла, как в base)
+        if status_manager:
+            status_manager.increment_processed_articles()
 
     # concats
     all_models = pd.concat(result_dfs)
