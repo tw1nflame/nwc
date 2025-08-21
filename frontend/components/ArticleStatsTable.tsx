@@ -102,14 +102,32 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
         selectedCols.push(col);
       }
     });
+    // Фильтрация полностью пустых столбцов
+    // Считаем, что первый столбец в stats — метрика, остальные — значения по колонкам
+    const colIsNotEmpty = (colIdx: number) => {
+      // colIdx соответствует индексу в selectedIdx/selectedCols
+      // В stats каждая строка: [метрика, ...значения]
+      return (rawStats as any[]).some((row: any[]) => {
+        const val = row[selectedIdx[colIdx] + 1];
+        return val !== null && val !== undefined && val !== '' && !(typeof val === 'number' && Number.isNaN(val)) && val !== '-';
+      });
+    };
+    const filteredIdx: number[] = [];
+    const filteredCols: string[] = [];
+    selectedCols.forEach((col, i) => {
+      if (colIsNotEmpty(i)) {
+        filteredIdx.push(selectedIdx[i]);
+        filteredCols.push(col);
+      }
+    });
     const filteredStats: any[][] = (rawStats as any[]).map((row: any[]) => {
       const out: any[] = [row[0]]; // metric name
-      (selectedIdx as number[]).forEach((idx: number) => {
+      (filteredIdx as number[]).forEach((idx: number) => {
         out.push(row[idx + 1]); // +1 потому что первый столбец — метрика
       });
       return out;
     });
-    return { columns: selectedCols, stats: filteredStats };
+    return { columns: filteredCols, stats: filteredStats };
   }, [rawStats, rawColumns, currency]);
 
   if (loading) return <div className="py-8 text-center">Загрузка статистики...</div>;

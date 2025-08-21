@@ -81,9 +81,13 @@ export function AnalyticsPage() {
     if (bulletChartData && bulletChartData.length > 0) {
       // eslint-disable-next-line no-console
       const allArticles = Array.from(new Set(bulletChartData.map(d => d.article)));
-      console.log('[BULLET RAW DATA]', bulletChartData);
-      console.log('[BULLET ALL ARTICLES]', allArticles);
+      // Логгирование по пайплайнам
+      const pipelines = Array.from(new Set(bulletChartData.map(d => d.pipeline)));
+      pipelines.forEach(pipeline => {
+        const articlesForPipeline = Array.from(new Set(bulletChartData.filter(d => d.pipeline === pipeline).map(d => d.article)));
+      });
     }
+    // удалено логгирование
   }, [bulletChartData]);
 
   React.useEffect(() => {
@@ -91,8 +95,8 @@ export function AnalyticsPage() {
       const filtered = bulletChartData.filter(d => d.pipeline === pipeline);
       const filteredArticles = Array.from(new Set(filtered.map(d => d.article)));
       // eslint-disable-next-line no-console
-      console.log(`[BULLET FILTERED ARTICLES for pipeline=${pipeline}]`, filteredArticles);
     }
+    // удалено логгирование
   }, [bulletChartData, pipeline]);
 
   return (

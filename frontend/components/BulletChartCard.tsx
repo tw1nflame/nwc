@@ -84,15 +84,14 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
 
   const articles = Array.from(new Set(filteredData.map(d => d.article)));
 
+
   // MultiSelect: выбранные статьи
   const [selectedArticles, setSelectedArticles] = useState<string[]>(articles);
   // Сброс выбора если список статей изменился
   useEffect(() => {
     setSelectedArticles(articles);
   }, [JSON.stringify(articles)]);
-  if (typeof window !== 'undefined') {
-    console.log('[BULLET] Все статьи с бэкенда:', Array.from(new Set((data || []).map((d: any) => d.article))));
-  }
+  // удалено логгирование
 
   // Привязываем цвет к статье по её позиции в общем списке статей
   const colors = [

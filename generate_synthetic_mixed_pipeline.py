@@ -147,6 +147,13 @@ def main():
     # Дата — только date
     df['Дата'] = pd.to_datetime(df['Дата']).dt.date
 
+    # Делим все значения (кроме % столбцов) на 70 для долларовых статей
+    usd_mask = df['Статья'].str.endswith('_USD')
+    # Столбцы, которые НЕ содержат %
+    value_cols = [col for col in df.columns if (df[col].dtype.kind in 'fi') and ('%' not in col)]
+    for col in value_cols:
+        df.loc[usd_mask, col] = df.loc[usd_mask, col] / 70
+
     # Сохранение
     os.makedirs('results', exist_ok=True)
     out_path = 'results/synthetic_mixed_pipeline.xlsx'

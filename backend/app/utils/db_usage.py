@@ -751,8 +751,6 @@ def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
         # (rest of the function remains unchanged)
     except Exception as e:
         import traceback
-        print(f"[get_article_stats_excel] EXCEPTION: {e}")
-        print(traceback.format_exc())
         logger.error(f"[get_article_stats_excel] EXCEPTION: {e}", exc_info=True)
         raise
     df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
@@ -1177,9 +1175,7 @@ def get_bullet_chart_data() -> dict:
                 'pipeline': pipeline_val
             })
         # Логгирование: какие статьи есть для каждого pipeline
-        print("[BULLET PIPELINE ARTICLES]")
-        for pipe, arts in pipeline_articles.items():
-            print(f"  pipeline={pipe}: {sorted(arts)}")
+    # (print/logging removed)
         # Получить курсы валют
         try:
             if not EXCHANGE_RATE_TABLE:
