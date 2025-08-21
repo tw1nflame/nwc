@@ -1167,7 +1167,8 @@ def get_bullet_chart_data() -> dict:
                 'model': model,
                 'date': date_str,
                 'deviation': safe_float(deviation),
-                'difference': safe_float(difference)
+                'difference': safe_float(difference),
+                'pipeline': row_dict.get('pipeline')
             })
         # Получить курсы валют
         try:
