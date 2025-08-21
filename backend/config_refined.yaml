@@ -147,40 +147,104 @@ TABPFNMIX_model:
 
     
 model_article:
-  Торговая ДЗ: stacking_rfr
-  Прочая ДЗ: svm9
-  Авансы выданные и расходы будущих периодов: linreg6_no_bias
-  Прочие налоги к возмещению ST: svm6
-  Прочие налоговые обязательства: tft
-  Задолженность перед персоналом: svm12
-  Резерв по неиспользованным отпускам: linreg9_with_bias
-  Краткосрочный резерв по премиям: autoarima
-  Прочее: svm6
-  Кредиторская задлолженность по ОС: chronos_base
-  Авансы полученные: patchtst
-  Авансы полученные(металлы): linreg12_no_bias
-  Торговая КЗ: ts_ml
-  Авансовые платежи по налогу на прибыль: linreg6_with_bias
-  Обязательства по налогу на прибыль: linreg9_no_bias
-  ЧОК (нормализовано на расчеты с акционерами): naive
+  Торговая ДЗ:
+    model: stacking_rfr
+    pipeline: base+
+  Прочая ДЗ:
+    model: svm9
+    pipeline: base+
+  Авансы выданные и расходы будущих периодов:
+    model: linreg6_no_bias
+    pipeline: base+
+  Прочие налоги к возмещению ST:
+    model: svm6
+    pipeline: base+
+  Прочие налоговые обязательства:
+    model: stacking_rfr
+    pipeline: base+
+  Задолженность перед персоналом:
+    model: svm12
+    pipeline: base+
+  Резерв по неиспользованным отпускам:
+    model: linreg9_with_bias
+    pipeline: base+
+  Краткосрочный резерв по премиям:
+    model: stacking_rfr
+    pipeline: base+
+  Прочее:
+    model: svm6
+    pipeline: base+
+  Кредиторская задлолженность по ОС:
+    model: stacking_rfr
+    pipeline: base+
+  Авансы полученные:
+    model: stacking_rfr
+    pipeline: base+
+  Авансы полученные(металлы):
+    model: linreg12_no_bias
+    pipeline: base+
+  Торговая КЗ:
+    model: TS_ML
+    pipeline: base+
+  Авансовые платежи по налогу на прибыль:
+    model: linreg6_with_bias
+    pipeline: base+
+  Обязательства по налогу на прибыль:
+    model: linreg9_no_bias
+    pipeline: base+
+  ЧОК (нормализовано на расчеты с акционерами):
+    model: naive
+    pipeline: base+
 
 model_article_reserved_model:
-  Торговая ДЗ: svm9
-  Прочая ДЗ: linreg6_no_bias
-  Авансы выданные и расходы будущих периодов: svm6
-  Прочие налоги к возмещению ST: tft
-  Прочие налоговые обязательства: svm12
-  Задолженность перед персоналом: linreg9_with_bias
-  Резерв по неиспользованным отпускам: autoarima
-  Краткосрочный резерв по премиям: svm6
-  Прочее: chronos_base
-  Кредиторская задлолженность по ОС: patchtst
-  Авансы полученные: linreg12_no_bias
-  Авансы полученные(металлы): ts_ml
-  Торговая КЗ: linreg6_with_bias
-  Авансовые платежи по налогу на прибыль: linreg9_no_bias
-  Обязательства по налогу на прибыль: naive
-  ЧОК (нормализовано на расчеты с акционерами): stacking_rfr
+  Торговая ДЗ:
+    model: linreg6_no_bias
+    pipeline: base+
+  Прочая ДЗ:
+    model: svm6
+    pipeline: base+
+  Авансы выданные и расходы будущих периодов:
+    model: tft
+    pipeline: base+
+  Прочие налоги к возмещению ST:
+    model: svm12
+    pipeline: base+
+  Прочие налоговые обязательства:
+    model: linreg9_with_bias
+    pipeline: base+
+  Задолженность перед персоналом:
+    model: autoarima
+    pipeline: base+
+  Резерв по неиспользованным отпускам:
+    model: svm6
+    pipeline: base+
+  Краткосрочный резерв по премиям:
+    model: chronos_base
+    pipeline: base+
+  Прочее:
+    model: patchtst
+    pipeline: base+
+  Кредиторская задлолженность по ОС:
+    model: linreg12_no_bias
+    pipeline: base+
+  Авансы полученные:
+    model: ts_ml
+    pipeline: base+
+  Авансы полученные(металлы):
+    model: linreg6_with_bias
+    pipeline: base+
+  Торговая КЗ:
+    model: linreg9_no_bias
+    pipeline: base+
+  Авансовые платежи по налогу на прибыль:
+    model: naive
+    pipeline: base+
+  Обязательства по налогу на прибыль:
+    model: stacking_rfr
+    pipeline: base+
+  ЧОК (нормализовано на расчеты с акционерами):
+    model: svm9
+    pipeline: base+
 
 
 bullet_chart_limits:

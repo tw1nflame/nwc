@@ -25,6 +25,8 @@ export interface BulletChartProps {
 export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, currency = 'RUB', exchangeRates = [], pipeline = 'base' }) => {
   const { config } = useConfig();
   const usdArticles: string[] = config?.['Статьи для предикта в USD'] || [];
+  // Получаем соответствие статья -> pipeline/model
+  const modelArticle = config?.model_article || {};
   // Получаем лимиты из config для выбранной валюты
   const bulletLimits = config?.bullet_chart_limits?.[currency] || {};
   const diffMin = Number(bulletLimits.diff_min ?? -10);
@@ -51,7 +53,7 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
     let rate = rateRow ? (rateRow['Курс'] ?? rateRow['exchange_rate']) : null;
     if (!rate || typeof rate !== 'number' || isNaN(rate) || rate <= 0) {
       if (!alertShownRef.current) {
-        alert(`Курс отсутствует для даты ${date} и потенциально других дат. Для них курс заменён на среднее значение.`);
+        console.log(`Курс отсутствует для даты ${date} и потенциально других дат. Для них курс заменён на среднее значение.`);
         alertShownRef.current = true;
       }
       rate = meanRate;
@@ -68,17 +70,25 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
     }
     return diff;
   }
+  // Для каждой статьи определяем pipeline и модель из config
   const filteredData = Array.isArray(data)
     ? data.filter(
-        d => typeof d.deviation === 'number' && !isNaN(d.deviation) && typeof d.difference === 'number' && !isNaN(d.difference) && d.pipeline === pipeline
+        d => {
+          const meta = modelArticle[d.article];
+          return (
+            typeof d.deviation === 'number' && !isNaN(d.deviation) &&
+            typeof d.difference === 'number' && !isNaN(d.difference) &&
+            meta && d.pipeline === meta.pipeline
+          );
+        }
       ).map(d => {
-        // deviation всегда в %, не конвертируется, но логгируем для контроля
-        const converted = {
+        const meta = modelArticle[d.article];
+        return {
           ...d,
+          model: meta?.model || d.model,
           difference: convertDifference(d.difference, d.date, d.article),
-          deviation: d.deviation // для логгирования
+          deviation: d.deviation
         };
-        return converted;
       })
     : [];
 

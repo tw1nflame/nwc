@@ -252,15 +252,15 @@ async def export_article_stats(request: Request, article: str = Query(..., descr
 # Новый эндпоинт для скачивания Excel по статье с агрегацией
 @app.get("/download_article_excel/")
 @require_authentication
-async def download_article_excel(request: Request, article: str = Query(..., description="Название статьи")):
+async def download_article_excel(request: Request, article: str = Query(..., description="Название статьи"), pipeline: str = Query(None, description="Pipeline (base/base+)", alias="pipeline")):
     """
     Скачивание Excel-файла по одной статье с агрегацией (данные + агрегированная таблица)
     """
     try:
-        excel_bytes = export_article_with_agg_excel(article)
+        excel_bytes = export_article_with_agg_excel(article, pipeline=pipeline)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    filename = f"article_{article}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    filename = f"article_{article}_{pipeline or ''}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
     ascii_filename = "article.xlsx"
     disposition = f"attachment; filename={ascii_filename}; filename*=UTF-8''{quote(filename)}"
     return StreamingResponse(

@@ -221,8 +221,14 @@ export function AnalysisPage() {
   } = useExcelContext()
 
 
-  // Получаем главную модель для выбранной статьи
-  const mainModel = config && config.model_article && selectedArticle ? config.model_article[selectedArticle] : null;
+  // Получаем главную модель для выбранной статьи и pipeline
+  let mainModel = null;
+  if (config && config.model_article && selectedArticle && pipeline) {
+    const info = config.model_article[selectedArticle];
+    if (info && typeof info === 'object' && info.pipeline === pipeline) {
+      mainModel = info.model;
+    }
+  }
   const mainModelLower = mainModel ? mainModel.toLowerCase() : null;
 
 
@@ -653,7 +659,7 @@ export function AnalysisPage() {
                           onClick={async () => {
                             if (!selectedArticle) return;
                             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-                            const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
+                            const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}&pipeline=${encodeURIComponent(pipeline)}`;
                             try {
                               const response = await fetch(url, {
                                 headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
@@ -663,7 +669,7 @@ export function AnalysisPage() {
                               const a = document.createElement('a');
                               const currentDate = new Date().toISOString().split('T')[0];
                               a.href = window.URL.createObjectURL(blob);
-                              a.download = `article_${selectedArticle}_${currentDate}.xlsx`;
+                              a.download = `article_${selectedArticle}_${pipeline}_${currentDate}.xlsx`;
                               a.click();
                               window.URL.revokeObjectURL(a.href);
                             } catch (err) {
