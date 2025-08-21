@@ -34,8 +34,22 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
   const modelArticle = config?.model_article || {};
   const selectedArticleLower = article.trim().toLowerCase();
   // В ArticleDataTable mainModelLower = modelArticle[selectedArticle]?.toLowerCase()
-  const mainModel = modelArticle[article] || null;
-  const mainModelLower = mainModel ? mainModel.toLowerCase() : null;
+  // Поддержка нового формата model_article с учётом pipeline
+  let mainModel: string | null = null;
+  let mainModelLower: string | undefined = undefined;
+  const articleConfig = modelArticle[article];
+  if (articleConfig && typeof articleConfig === 'object' && 'model' in articleConfig && 'pipeline' in articleConfig) {
+    if (articleConfig.pipeline === pipeline) {
+      mainModel = articleConfig.model;
+      mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+    } else {
+      mainModel = null;
+      mainModelLower = undefined;
+    }
+  } else if (typeof articleConfig === 'string') {
+    mainModel = articleConfig;
+    mainModelLower = mainModel.toLowerCase();
+  }
   const isUsdArticle = usdArticles.map((a: string) => a.trim().toLowerCase()).includes(selectedArticleLower);
   const toDateKey = (d: any) => (typeof d === 'number' ? excelSerialToDate(d) : (typeof d === 'string' ? d.slice(0, 10) : d));
   const ratesIndex = new Map<string, number>();

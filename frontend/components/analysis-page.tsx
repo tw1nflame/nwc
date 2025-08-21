@@ -1,3 +1,4 @@
+
 "use client"
 import { AnalysisGraphs } from "./analyze/graphs";
 import { ArticleDataTable } from "./analyze/ArticleDataTable";
@@ -221,9 +222,31 @@ export function AnalysisPage() {
   } = useExcelContext()
 
 
-  // Получаем главную модель для выбранной статьи
-  const mainModel = config && config.model_article && selectedArticle ? config.model_article[selectedArticle] : null;
-  const mainModelLower = mainModel ? mainModel.toLowerCase() : null;
+  // Получаем главную модель для выбранной статьи и выбранного pipeline
+
+  // Сброс выбора моделей при смене pipeline, чтобы автоселектор сработал корректно
+  useEffect(() => {
+    setSelectedModels([]);
+  }, [pipeline]);
+  let mainModel = null;
+  let mainModelLower: string | undefined = undefined;
+  if (config && config.model_article && selectedArticle && pipeline) {
+    const articleConfig = config.model_article[selectedArticle];
+    if (articleConfig && typeof articleConfig === 'object' && 'model' in articleConfig && 'pipeline' in articleConfig) {
+      // Новый формат: { model, pipeline }
+      if (articleConfig.pipeline === pipeline) {
+        mainModel = articleConfig.model;
+  mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+      } else {
+        mainModel = null;
+  mainModelLower = undefined;
+      }
+    } else if (typeof articleConfig === 'string') {
+      // Старый формат: просто строка
+      mainModel = articleConfig;
+  mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+    }
+  }
 
 
 

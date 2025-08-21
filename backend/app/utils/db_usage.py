@@ -613,33 +613,56 @@ def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bo
             mapped_columns = list(df_data.columns)
             logger.info(f"Применено обратное маппинг колонок: {len(original_columns)} -> {len(mapped_columns)}")
             final_rows = []
-            for _, row in df_data.iterrows():
-                article = row.get('Статья')
-                model_name = model_article.get(article)
-                if not model_name:
-                    continue
-                pred_col = f'predict_{model_name}'
-                mapped_pred_col = None
-                for col in df_data.columns:
-                    if col.lower() == pred_col.lower():
-                        mapped_pred_col = col
-                        break
-                if not mapped_pred_col:
-                    continue
-                adjustment = row.get('Корректировка, руб', 0) or 0
-                description = row.get('Описание', '') or ''
-                final_rows.append({
-                    'Дата': row.get('Дата'),
-                    'Статья': article,
-                    'Fact': row.get('Fact'),
-                    'Прогноз': row.get(mapped_pred_col),
-                    'Корректировка': adjustment,
-                    'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
-                    'Описание': description,
-                    'Модель': model_name
-                })
-            df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
-            dataframes_dict['final_prediction'] = df_final
+            # Для каждой уникальной (дата, статья) ищем строку с pipeline из config и берём нужную predict-колонку
+            key_cols = ['Дата', 'Статья']
+            if 'Дата' not in df_data.columns or 'Статья' not in df_data.columns:
+                logger.error('Нет нужных колонок Дата/Статья в данных для финального прогноза')
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
+                dataframes_dict['final_prediction'] = df_final
+            else:
+                # Группируем по (Дата, Статья)
+                for (date, article), group in df_data.groupby(['Дата', 'Статья']):
+                    model_cfg = model_article.get(article)
+                    model_name = None
+                    pipeline_cfg = None
+                    if isinstance(model_cfg, dict):
+                        model_name = model_cfg.get('model')
+                        pipeline_cfg = model_cfg.get('pipeline')
+                    elif isinstance(model_cfg, str):
+                        model_name = model_cfg
+                        pipeline_cfg = None
+                    if not model_name:
+                        continue
+                    # Ищем строку с нужным pipeline
+                    if pipeline_cfg:
+                        row = group[group['pipeline'] == pipeline_cfg].head(1)
+                    else:
+                        row = group.head(1)
+                    if row.empty:
+                        continue
+                    row = row.iloc[0]
+                    pred_col = f'predict_{model_name}'
+                    mapped_pred_col = None
+                    for col in df_data.columns:
+                        if col.lower() == pred_col.lower():
+                            mapped_pred_col = col
+                            break
+                    if not mapped_pred_col:
+                        continue
+                    adjustment = row.get('Корректировка, руб', 0) or 0
+                    description = row.get('Описание', '') or ''
+                    final_rows.append({
+                        'Дата': date,
+                        'Статья': article,
+                        'Fact': row.get('Fact'),
+                        'Прогноз': row.get(mapped_pred_col),
+                        'Корректировка': adjustment,
+                        'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
+                        'Описание': description,
+                        'Модель': model_name
+                    })
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
+                dataframes_dict['final_prediction'] = df_final
         # Остальные листы
         for sheet, table in sheet_to_table.items():
             if table is None:
