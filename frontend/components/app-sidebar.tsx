@@ -63,8 +63,7 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
             <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Прогнозирование</h2>
-            <p className="text-sm text-gray-500">Система анализа</p>
+            <h2 className="text-xl font-bold text-gray-900">Базовое моделирование</h2>
           </div>
         </div>
       </SidebarHeader>

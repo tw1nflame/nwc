@@ -97,9 +97,9 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
 
   // MultiSelect: выбранные статьи
   const [selectedArticles, setSelectedArticles] = useState<string[]>(articles);
-  // Сброс выбора если список статей изменился
+  // При изменении списка статей: удалять только те, которых больше нет, но не сбрасывать выбор пользователя
   useEffect(() => {
-    setSelectedArticles(articles);
+    setSelectedArticles(prev => prev.filter(a => articles.includes(a)));
   }, [JSON.stringify(articles)]);
   // удалено логгирование
 
