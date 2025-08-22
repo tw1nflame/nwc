@@ -661,7 +661,7 @@ def load_exchange_rates(conn, logger) -> pd.DataFrame | None:
 
 
 def create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments) -> pd.DataFrame | None:
-    """Создает финальный прогноз, используя векторизованные операции."""
+    """Создает финальный прогноз, используя векторизованные операции (исправленная версия)."""
     logger.info("Создание финального предсказания (векторизованный метод)")
     
     config = load_config(CONFIG_PATH)
@@ -679,7 +679,6 @@ def create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments) -
     # 2. Объединяем с корректировками (если они есть)
     if df_adjustments is not None:
         df_data['date'] = pd.to_datetime(df_data['date'])
-        # df_adjustments['date'] уже в формате datetime
         df_data = df_data.merge(
             df_adjustments, 
             on=['date', 'article'],
@@ -691,14 +690,15 @@ def create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments) -
         df_data['adjustment_value'] = 0
         df_data['description'] = ''
     
-    # 3. Переименовываем колонки
-    df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
+    # 3. ***ИЗМЕНЕНИЕ***: НЕ переименовываем колонки здесь. 
+    # Работаем с 'date', 'article', 'adjustment_value' и т.д.
     
-    if 'Дата' not in df_data.columns or 'Статья' not in df_data.columns:
-        logger.error('Нет колонок Дата/Статья для финального прогноза')
+    # Проверяем наличие 'сырых' колонок
+    if 'date' not in df_data.columns or 'article' not in df_data.columns:
+        logger.error('Нет колонок date/article для финального прогноза')
         return None
 
-    # 4. ВЕКТОРИЗАЦИЯ - ядро оптимизации
+    # 4. ВЕКТОРИЗАЦИЯ
     # 4.1. Подготавливаем маппинги из конфига
     article_to_model = {}
     article_to_pipeline = {}
@@ -709,56 +709,62 @@ def create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments) -
         elif isinstance(cfg, str):
             article_to_model[article] = cfg
 
-    # 4.2. Применяем маппинги для создания "целевых" колонок
-    df_data['target_model'] = df_data['Статья'].map(article_to_model)
-    df_data['target_pipeline'] = df_data['Статья'].map(article_to_pipeline)
+    # 4.2. Применяем маппинги (используем 'article', а не 'Статья')
+    df_data['target_model'] = df_data['article'].map(article_to_model)
+    df_data['target_pipeline'] = df_data['article'].map(article_to_pipeline)
 
-    # 4.3. Фильтруем строки, где нет модели или которые не соответствуют pipeline из конфига
+    # 4.3. Фильтруем строки
     df_filtered = df_data.dropna(subset=['target_model']).copy()
-    # Условие: либо pipeline строки совпадает с целевым, либо целевой pipeline не задан (None)
     correct_pipeline_mask = (df_filtered['pipeline'] == df_filtered['target_pipeline']) | (df_filtered['target_pipeline'].isnull())
     df_filtered = df_filtered[correct_pipeline_mask]
     
-    # 4.4. Эмулируем .head(1) для каждой группы - оставляем только первую подходящую запись
-    df_final_candidates = df_filtered.sort_values(['Дата', 'Статья']).drop_duplicates(subset=['Дата', 'Статья'], keep='first')
+    # 4.4. Оставляем первую подходящую запись (используем 'date', 'article')
+    df_final_candidates = df_filtered.sort_values(['date', 'article']).drop_duplicates(subset=['date', 'article'], keep='first')
     
-    # 4.5. "Расплавляем" (melt) predict-колонки для быстрого поиска нужного значения
-    predict_cols = [col for col in df_final_candidates.columns if col.startswith('predict_')]
-    if not predict_cols:
+    # 4.5. "Расплавляем" predict-колонки. 
+    # ***ИЗМЕНЕНИЕ***: `predict_` колонки тоже пока не переименовываем
+    predict_cols_db_names = [col for col in df_final_candidates.columns if col.startswith('predict_')]
+    if not predict_cols_db_names:
         logger.error("В данных не найдено ни одной predict-колонки.")
+        # Создаем пустой DF с финальными, человекочитаемыми именами
         return pd.DataFrame(columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
 
-    id_vars = [col for col in df_final_candidates.columns if col not in predict_cols]
+    id_vars = [col for col in df_final_candidates.columns if col not in predict_cols_db_names]
     
     df_melted = df_final_candidates.melt(
         id_vars=id_vars,
-        value_vars=predict_cols,
+        value_vars=predict_cols_db_names,
         var_name='predict_col_name',
-        value_name='Прогноз'
+        value_name='prediction_value' # Временное имя
     )
     
-    # 4.6. Выбираем только те строки, где название predict-колонки совпадает с целевой моделью
-    # Cоздаем столбец 'expected_predict_col' для сравнения
+    # 4.6. Выбираем нужные прогнозы
     df_melted['expected_predict_col'] = 'predict_' + df_melted['target_model']
-    
-    # Сравниваем в нижнем регистре для надежности
-    final_rows = df_melted[df_melted['predict_col_name'].str.lower() == df_melted['expected_predict_col'].str.lower()]
+    final_rows_raw = df_melted[df_melted['predict_col_name'].str.lower() == df_melted['expected_predict_col'].str.lower()]
 
-    # 5. Собираем итоговый датафрейм
-    final_rows = final_rows.rename(columns={
-        'adjustment_value': 'Корректировка',
-        'description': 'Описание',
-        'target_model': 'Модель'
-    })
+    # 5. ***ИЗМЕНЕНИЕ***: Собираем итоговый датафрейм, ПЕРЕИМЕНОВЫВАЯ КОЛОНКИ НА ЭТОМ ШАГЕ
+    final_df = pd.DataFrame()
     
-    final_rows['Финальный прогноз'] = final_rows['Прогноз'].fillna(0) + final_rows['Корректировка'].fillna(0)
-
-    output_columns = ['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель']
-    # Убедимся, что все колонки существуют, чтобы избежать KeyError
-    final_df = pd.DataFrame(columns=output_columns)
-    for col in output_columns:
-        if col in final_rows:
-            final_df[col] = final_rows[col]
+    # Используем .get() для безопасности, если какая-то колонка отсутствует
+    final_df['Дата'] = final_rows_raw.get('date')
+    final_df['Статья'] = final_rows_raw.get('article')
+    
+    # Ищем 'fact' колонку, применяя reverse mapping
+    fact_col_name_ru = REVERSE_COLUMN_MAPPING.get('fact', 'Fact')
+    final_df[fact_col_name_ru] = final_rows_raw.get('fact')
+    
+    final_df['Прогноз'] = final_rows_raw.get('prediction_value')
+    final_df['Корректировка'] = final_rows_raw.get('adjustment_value')
+    final_df['Описание'] = final_rows_raw.get('description')
+    final_df['Модель'] = final_rows_raw.get('target_model')
+    
+    # Теперь вычисление безопасно
+    final_df['Финальный прогноз'] = final_df['Прогноз'].fillna(0) + final_df['Корректировка'].fillna(0)
+    
+    # Приводим к нужному порядку колонок (используем имя Fact из маппинга)
+    output_columns = ['Дата', 'Статья', fact_col_name_ru, 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель']
+    # Отфильтровываем колонки, которые могли не создаться (на случай отсутствия данных)
+    final_df = final_df[[col for col in output_columns if col in final_df.columns]]
 
     logger.info(f"Финальный прогноз собран векторизованно: {len(final_df)} строк.")
     return final_df
