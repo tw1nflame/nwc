@@ -626,9 +626,17 @@ def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bo
                 df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
                 dataframes_dict['final_prediction'] = df_final
             else:
+                usd_articles = config.get('Статьи для предикта в USD', [])
                 # Группируем по (Дата, Статья)
                 for (date, article), group in df_data.groupby(['Дата', 'Статья']):
+                    # Если статья заканчивается на _USD, ищем модель по "чистому" имени
+                    if article.endswith('_USD'):
+                        base_article = article[:-4]
+                    else:
+                        base_article = article
                     model_cfg = model_article.get(article)
+                    if not model_cfg:
+                        model_cfg = model_article.get(base_article)
                     model_name = None
                     pipeline_cfg = None
                     if isinstance(model_cfg, dict):
