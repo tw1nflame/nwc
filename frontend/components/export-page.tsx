@@ -172,7 +172,9 @@ export function ExportPage() {
       setUploadMessage(error instanceof Error ? error.message : "Неизвестная ошибка")
     }
   }
+  const [loadingExcel, setLoadingExcel] = useState(false)
   const handleExcelDownload = async () => {
+    setLoadingExcel(true)
     try {
       const blob = await downloadExcel(accessToken)
       const url = window.URL.createObjectURL(blob)
@@ -184,6 +186,8 @@ export function ExportPage() {
       window.URL.revokeObjectURL(url)
     } catch (err) {
       alert('Ошибка скачивания файла')
+    } finally {
+      setLoadingExcel(false)
     }
   }
 
@@ -210,9 +214,22 @@ export function ExportPage() {
             <Button
               onClick={handleExcelDownload}
               className="w-full bg-green-600 hover:bg-green-700 text-white py-4 text-base font-semibold shadow-lg"
+              disabled={loadingExcel}
             >
-              <Download className="w-4 h-4 mr-2" />
-              Скачать Excel файл
+              {loadingExcel ? (
+                <>
+                  <svg className="animate-spin w-4 h-4 mr-2 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Загрузка...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Скачать Excel файл
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>

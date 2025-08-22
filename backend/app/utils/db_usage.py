@@ -9,6 +9,14 @@ from dotenv import load_dotenv
 from utils.column_mapping import REVERSE_COLUMN_MAPPING, COLUMN_MAPPING
 from utils.config import load_config
 from utils.common import setup_custom_logging
+import sqlalchemy
+from utils.excel_formatter import save_dataframes_to_excel
+import tempfile
+import os
+from openpyxl import load_workbook
+from openpyxl.styles import numbers, Alignment
+from openpyxl.utils import get_column_letter
+
 
 load_dotenv()
 
@@ -294,7 +302,6 @@ def set_pipeline_column(date_column: str, date_value: str, pipeline_value: str, 
         conn.close()
         logger.info("Соединение с БД для pipeline закрыто")
 
-from io import BytesIO
 
 def process_exchange_rate_file(file_path: str, rate_column: str = 'Курс', date_column: str = 'Дата', sheet_name: str = None):
     """
@@ -561,8 +568,7 @@ def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bo
     """
     logger = setup_custom_logging()
     logger.info(f"Начало сбора таблиц. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
-    import psycopg2
-    import pandas as pd
+    
     conn = psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -726,9 +732,7 @@ def dataframes_to_excel(dataframes_dict: dict) -> BytesIO:
     """
     Сохраняет dict датафреймов в Excel-файл в памяти и возвращает BytesIO.
     """
-    from utils.excel_formatter import save_dataframes_to_excel
-    import tempfile
-    import os
+    
     logger = setup_custom_logging()
     tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     tmp.close()
@@ -771,7 +775,6 @@ def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
         if df.empty:
             raise ValueError(f"Нет данных для статьи: {article_name} (pipeline={pipeline})")
     except Exception as e:
-        import traceback
         logger.error(f"[get_article_stats_excel] EXCEPTION: {e}", exc_info=True)
         raise
     df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
@@ -1058,13 +1061,10 @@ def export_article_with_agg_excel(article_name: str, pipeline: str = None) -> By
     output.seek(0)
 
     # Форматируем только верхнюю таблицу (df_main) через openpyxl
-    from openpyxl import load_workbook
     output2 = BytesIO(output.read())
     wb = load_workbook(output2)
     ws = wb['Статья+Агрегация']
     # Верхняя таблица: строки 1 (заголовок) до len(df_main)+1 включительно
-    from openpyxl.styles import numbers, Alignment
-    from openpyxl.utils import get_column_letter
     header_height = 40
     ws.row_dimensions[1].height = header_height
     header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -1137,7 +1137,6 @@ def export_article_with_agg_excel(article_name: str, pipeline: str = None) -> By
     return output_final
 
 def get_bullet_chart_data() -> dict:
-    import sqlalchemy
     db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = sqlalchemy.create_engine(db_url)
     conn = psycopg2.connect(
@@ -1159,40 +1158,49 @@ def get_bullet_chart_data() -> dict:
         return None, None
     try:
         df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', engine)
+        logger.info(f"[get_bullet_chart_data] DATA_TABLE shape: {df.shape}")
+        logger.info(f"[get_bullet_chart_data] DATA_TABLE columns: {list(df.columns)}")
+        logger.info(f"[get_bullet_chart_data] DATA_TABLE head:\n{df.head(10).to_string()}")
+        unique_articles = df['Статья'].unique() if 'Статья' in df.columns else []
+        logger.info(f"[get_bullet_chart_data] Уникальные статьи: {unique_articles}")
+        unique_pipelines = df['pipeline'].unique() if 'pipeline' in df.columns else []
+        logger.info(f"[get_bullet_chart_data] Уникальные pipeline: {unique_pipelines}")
         df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
         # Приводим все имена колонок к нижнему регистру для унификации поиска
         df.columns = [col.lower() for col in df.columns]
-        # Для каждой (дата, статья) ищем только строку с pipeline==целевой и берем predict_{model}*
+        logger.info(f"[get_bullet_chart_data] columns after mapping/lower: {list(df.columns)}")
+        logger.info(f"[get_bullet_chart_data] head after mapping/lower:\n{df.head(10).to_string()}")
         result = []
-        # Словарь: (article_for_front, date) -> row
         used_keys = set()
         for idx, row in df.iterrows():
             row_dict = {k.lower(): v for k, v in row.items()}
             article = row_dict.get('статья')
             date = row_dict.get('дата')
             pipeline_val = row_dict.get('pipeline')
+            logger.info(f"[get_bullet_chart_data] row idx={idx} article={article} date={date} pipeline_val={pipeline_val}")
             if not article or date is None:
+                logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия article/date")
                 continue
-            # base_article без _USD
             base_article = article[:-4] if article.endswith('_usd') else article
             model, pipeline_cfg = get_model_and_pipeline_for_article(model_article, base_article)
+            logger.info(f"[get_bullet_chart_data] base_article={base_article} model={model} pipeline_cfg={pipeline_cfg}")
             if not model or not pipeline_cfg:
+                logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия model/pipeline_cfg")
                 continue
-            # pipeline должен совпадать с config
             if str(pipeline_val).lower() != str(pipeline_cfg).lower():
+                logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за несовпадения pipeline: {pipeline_val} != {pipeline_cfg}")
                 continue
-            # Для фронта статья без _USD
             article_for_front = article[:-4] if article.endswith('_usd') else article
-            # Ключ для уникальности
             key = (article_for_front, date)
             if key in used_keys:
+                logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за повторяющегося ключа {key}")
                 continue
             used_keys.add(key)
-            # predict_{model} разница и predict_{model} отклонение %
             diff_key = f'predict_{model} разница'.lower()
             dev_key = f'predict_{model} отклонение %'.lower()
             difference = row_dict.get(diff_key)
             deviation = row_dict.get(dev_key)
+            logger.info(f"[get_bullet_chart_data] idx={idx} diff_key={diff_key} difference={difference} dev_key={dev_key} deviation={deviation}")
             if isinstance(date, pd.Timestamp):
                 date_str = date.strftime('%Y-%m-%d')
             else:
@@ -1213,14 +1221,15 @@ def get_bullet_chart_data() -> dict:
                 'difference': safe_float(difference),
                 'pipeline': pipeline_val
             })
-        # Получить курсы валют
+        logger.info(f"[get_bullet_chart_data] Итоговый размер result: {len(result)}")
         try:
             if not EXCHANGE_RATE_TABLE:
                 raise ValueError('EXCHANGE_RATE_TABLE env var is not set')
             df_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', engine)
+            logger.info(f"[get_bullet_chart_data] Курсы валют shape: {df_rates.shape}")
+            logger.info(f"[get_bullet_chart_data] Курсы валют head:\n{df_rates.head(10).to_string()}")
             df_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_rates.columns]
             exchange_rates = df_rates.to_dict(orient='records')
-            # Преобразовать все значения типа date в строку
             for row in exchange_rates:
                 for k, v in row.items():
                     if hasattr(v, 'isoformat'):
@@ -1228,6 +1237,7 @@ def get_bullet_chart_data() -> dict:
         except Exception as e:
             logger.warning(f"Не удалось получить курсы валют: {e}")
             exchange_rates = []
+        logger.info(f"[get_bullet_chart_data] Возвращаемых строк: {len(result)}")
         return {'data': result, 'exchange_rates': exchange_rates}
     finally:
         conn.close()
