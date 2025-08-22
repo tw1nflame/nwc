@@ -1170,48 +1170,47 @@ def get_bullet_chart_data() -> dict:
             unique_pipelines = df['pipeline'].unique()
             logger.info(f"[get_bullet_chart_data] Уникальные pipeline: {unique_pipelines}")
         df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
-        # Приводим все имена колонок к нижнему регистру для унификации поиска
-        df.columns = [col.lower() for col in df.columns]
-        logger.info(f"[get_bullet_chart_data] columns after mapping/lower: {list(df.columns)}")
-        logger.info(f"[get_bullet_chart_data] head after mapping/lower:\n{df.head(10).to_string()}")
+        logger.info(f"[get_bullet_chart_data] columns after mapping: {list(df.columns)}")
+        logger.info(f"[get_bullet_chart_data] head after mapping:\n{df.head(10).to_string()}")
         result = []
         used_keys = set()
         for idx, row in df.iterrows():
-            row_dict = {k.lower(): v for k, v in row.items()}
-            article = row_dict.get('статья')
-            date = row_dict.get('дата')
+            row_dict = {k: v for k, v in row.items()}
+            article = row_dict.get('Статья')
+            date = row_dict.get('Дата')
             pipeline_val = row_dict.get('pipeline')
             # Логгируем только если статья Торговая ДЗ (включая _USD)
-            if article and 'торговая дз' in article.lower():
+            if article and 'Торговая ДЗ' in article:
                 logger.info(f"[get_bullet_chart_data] row idx={idx} article={article} date={date} pipeline_val={pipeline_val}")
             if not article or date is None:
-                if article and 'торговая дз' in article.lower():
+                if article and 'Торговая ДЗ' in article:
                     logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия article/date")
                 continue
-            base_article = article[:-4] if article.endswith('_usd') else article
+            base_article = article[:-4] if article.endswith('_USD') else article
+            base_article = base_article.strip()
             model, pipeline_cfg = get_model_and_pipeline_for_article(model_article, base_article)
-            if article and 'торговая дз' in article.lower():
+            if article and 'Торговая ДЗ' in article:
                 logger.info(f"[get_bullet_chart_data] base_article={base_article} model={model} pipeline_cfg={pipeline_cfg}")
             if not model or not pipeline_cfg:
-                if article and 'торговая дз' in article.lower():
+                if article and 'Торговая ДЗ' in article:
                     logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия model/pipeline_cfg")
                 continue
             if str(pipeline_val).lower() != str(pipeline_cfg).lower():
-                if article and 'торговая дз' in article.lower():
+                if article and 'Торговая ДЗ' in article:
                     logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за несовпадения pipeline: {pipeline_val} != {pipeline_cfg}")
                 continue
-            article_for_front = article[:-4] if article.endswith('_usd') else article
+            article_for_front = article[:-4] if article.endswith('_USD') else article
             key = (article_for_front, date)
             if key in used_keys:
-                if article and 'торговая дз' in article.lower():
+                if article and 'Торговая ДЗ' in article:
                     logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за повторяющегося ключа {key}")
                 continue
             used_keys.add(key)
-            diff_key = f'predict_{model} разница'.lower()
-            dev_key = f'predict_{model} отклонение %'.lower()
+            diff_key = f'predict_{model} разница'
+            dev_key = f'predict_{model} отклонение %'
             difference = row_dict.get(diff_key)
             deviation = row_dict.get(dev_key)
-            if article and 'торговая дз' in article.lower():
+            if article and 'Торговая ДЗ' in article:
                 logger.info(f"[get_bullet_chart_data] idx={idx} diff_key={diff_key} difference={difference} dev_key={dev_key} deviation={deviation}")
             if isinstance(date, pd.Timestamp):
                 date_str = date.strftime('%Y-%m-%d')
