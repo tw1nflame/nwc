@@ -1158,20 +1158,7 @@ def get_bullet_chart_data() -> dict:
         return None, None
     try:
         df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', engine)
-        # Логгируем только строки по Торговая ДЗ (и USD)
-        logger.info(f"[get_bullet_chart_data] DATA_TABLE shape: {df.shape}")
-        logger.info(f"[get_bullet_chart_data] DATA_TABLE columns: {list(df.columns)}")
-        if 'Статья' in df.columns:
-            mask_torg = df['Статья'].astype(str).str.contains('Торговая ДЗ', case=False, na=False)
-            logger.info(f"[get_bullet_chart_data] Торговая ДЗ строки: {df[mask_torg].to_string()}")
-            unique_articles = df.loc[mask_torg, 'Статья'].unique()
-            logger.info(f"[get_bullet_chart_data] Уникальные статьи (Торговая ДЗ): {unique_articles}")
-        if 'pipeline' in df.columns:
-            unique_pipelines = df['pipeline'].unique()
-            logger.info(f"[get_bullet_chart_data] Уникальные pipeline: {unique_pipelines}")
         df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
-        logger.info(f"[get_bullet_chart_data] columns after mapping: {list(df.columns)}")
-        logger.info(f"[get_bullet_chart_data] head after mapping:\n{df.head(10).to_string()}")
         result = []
         used_keys = set()
         for idx, row in df.iterrows():
@@ -1179,31 +1166,18 @@ def get_bullet_chart_data() -> dict:
             article = row_dict.get('Статья')
             date = row_dict.get('Дата')
             pipeline_val = row_dict.get('pipeline')
-            # Логгируем только если статья Торговая ДЗ (включая _USD)
-            if article and 'Торговая ДЗ' in article:
-                logger.info(f"[get_bullet_chart_data] row idx={idx} article={article} date={date} pipeline_val={pipeline_val}")
             if not article or date is None:
-                if article and 'Торговая ДЗ' in article:
-                    logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия article/date")
                 continue
             base_article = article[:-4] if article.endswith('_USD') else article
             base_article = base_article.strip()
             model, pipeline_cfg = get_model_and_pipeline_for_article(model_article, base_article)
-            if article and 'Торговая ДЗ' in article:
-                logger.info(f"[get_bullet_chart_data] base_article={base_article} model={model} pipeline_cfg={pipeline_cfg}")
             if not model or not pipeline_cfg:
-                if article and 'Торговая ДЗ' in article:
-                    logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за отсутствия model/pipeline_cfg")
                 continue
             if str(pipeline_val).lower() != str(pipeline_cfg).lower():
-                if article and 'Торговая ДЗ' in article:
-                    logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за несовпадения pipeline: {pipeline_val} != {pipeline_cfg}")
                 continue
             article_for_front = article[:-4] if article.endswith('_USD') else article
             key = (article_for_front, date)
             if key in used_keys:
-                if article and 'Торговая ДЗ' in article:
-                    logger.info(f"[get_bullet_chart_data] Пропуск строки idx={idx} из-за повторяющегося ключа {key}")
                 continue
             used_keys.add(key)
             diff_key = f'predict_{model} разница'
@@ -1215,8 +1189,6 @@ def get_bullet_chart_data() -> dict:
                     difference = v
                 if k.lower() == dev_key.lower():
                     deviation = v
-            if article and 'Торговая ДЗ' in article:
-                logger.info(f"[get_bullet_chart_data] idx={idx} diff_key={diff_key} difference={difference} dev_key={dev_key} deviation={deviation}")
             if isinstance(date, pd.Timestamp):
                 date_str = date.strftime('%Y-%m-%d')
             else:

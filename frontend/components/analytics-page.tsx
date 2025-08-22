@@ -39,16 +39,11 @@ export function AnalyticsPage() {
     })
       .then(res => res.json())
       .then(data => {
-        // Логгирование данных, приходящих с бэкенда
-        // eslint-disable-next-line no-console
-        console.log('[BulletChart] Backend response:', data);
         setBulletChartData(data.data || []);
         setExchangeRates(data.exchange_rates || []);
         setLoading(false);
       })
       .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('[BulletChart] Backend fetch error:', err);
         setBulletChartData([]);
         setExchangeRates([]);
         setLoading(false);
