@@ -220,6 +220,50 @@ export function AnalysisPage() {
     setSelectedModels,
   } = useExcelContext()
 
+  // Модели, для которых есть значения по выбранному pipeline и статье
+  const availableModelsForPipeline = React.useMemo(() => {
+    if (!parsedJson || !selectedArticle || !pipeline) return [];
+    const selectedArticleLower = selectedArticle.trim().toLowerCase();
+    // Логика долларовых статей как в графиках
+    const usdArticles = config?.["Статьи для предикта в USD"] || [];
+    const isUsdArticle = usdArticles.map((a: string) => a.trim().toLowerCase()).includes(selectedArticleLower);
+    const filteredRows = parsedJson.filter((row: any) => {
+      const rowArticle = (row["Статья"] || "").toString().trim().toLowerCase();
+      const rowPipeline = (row["pipeline"] || "").toString().toLowerCase();
+      if (rowPipeline !== pipeline) return false;
+      if (isUsdArticle) {
+        return rowArticle === selectedArticleLower || rowArticle === selectedArticleLower + '_usd';
+      } else {
+        return rowArticle === selectedArticleLower;
+      }
+    });
+    // DEBUG: выводим что реально фильтруется
+    if (filteredRows.length === 0) {
+      console.log('filteredRows пустой для', selectedArticle, pipeline);
+    } else {
+      console.log('filteredRows:', filteredRows);
+      filteredRows.forEach((row, i) => {
+        console.log(`row[${i}] keys:`, Object.keys(row));
+      });
+    }
+    // Собираем модели, для которых есть хоть одно значение
+    const modelSet = new Set<string>();
+    filteredRows.forEach((row: any) => {
+      Object.keys(row).forEach((key) => {
+        const match = key.match(/^predict_(.+)$/);
+        if (match && row[key] !== undefined && row[key] !== null && row[key] !== "") {
+          modelSet.add(match[1]);
+        }
+      });
+    });
+    // DEBUG: какие модели найдены
+    console.log('modelSet:', Array.from(modelSet));
+    // Сохраняем только те модели, которые есть в общем списке models (сохраняем порядок)
+    const filteredModels = models.filter((m: string) => modelSet.has(m));
+    console.log('filteredModels:', filteredModels);
+    return filteredModels;
+  }, [parsedJson, selectedArticle, pipeline, models, config]);
+
 
   // Получаем главную модель для выбранной статьи и выбранного pipeline
 
@@ -227,23 +271,26 @@ export function AnalysisPage() {
   useEffect(() => {
     setSelectedModels([]);
   }, [pipeline]);
-  let mainModel = null;
+  let mainModel: string | null = null;
   let mainModelLower: string | undefined = undefined;
-  if (config && config.model_article && selectedArticle && pipeline) {
+  let mainPipeline: 'base' | 'base+' | undefined = undefined;
+  if (config && config.model_article && selectedArticle) {
     const articleConfig = config.model_article[selectedArticle];
     if (articleConfig && typeof articleConfig === 'object' && 'model' in articleConfig && 'pipeline' in articleConfig) {
-      // Новый формат: { model, pipeline }
-      if (articleConfig.pipeline === pipeline) {
+      if (pipeline === articleConfig.pipeline) {
         mainModel = articleConfig.model;
-  mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+        mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+        mainPipeline = articleConfig.pipeline;
       } else {
         mainModel = null;
-  mainModelLower = undefined;
+        mainModelLower = undefined;
+        mainPipeline = undefined;
       }
     } else if (typeof articleConfig === 'string') {
       // Старый формат: просто строка
       mainModel = articleConfig;
-  mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+      mainModelLower = typeof mainModel === 'string' ? mainModel.toLowerCase() : undefined;
+      // mainPipeline не определяем, т.к. нет инфы
     }
   }
 
@@ -536,11 +583,18 @@ export function AnalysisPage() {
                         value="corrected"
                         checked={forecastType === 'corrected'}
                         onChange={(e) => {
+                          // mainPipeline нужно вычислить до setForecastType, иначе оно будет undefined
+                          let targetPipeline: 'base' | 'base+' | undefined = undefined;
+                          if (config && config.model_article && selectedArticle) {
+                            const articleConfig = config.model_article[selectedArticle];
+                            if (articleConfig && typeof articleConfig === 'object' && 'pipeline' in articleConfig) {
+                              targetPipeline = articleConfig.pipeline;
+                            }
+                          }
                           setForecastType(e.target.value as 'original' | 'corrected');
-                          if (e.target.value === 'corrected') {
-                            // При переключении на скорректированный прогноз сбрасываем выбор моделей
-                            // useEffect автоматически выберет целевую модель
-                            setSelectedModels([]);
+                          setSelectedModels([]);
+                          if (targetPipeline && pipeline !== targetPipeline) {
+                            setPipeline(targetPipeline);
                           }
                         }}
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
@@ -574,7 +628,7 @@ export function AnalysisPage() {
                     </label>
                   </div>
                   <div className="space-y-2">
-                    <label className="flex items-center space-x-2 cursor-pointer">
+                    <label className={`flex items-center space-x-2 cursor-pointer ${forecastType === 'corrected' && mainPipeline !== 'base' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                       <input
                         type="radio"
                         name="pipeline"
@@ -582,10 +636,11 @@ export function AnalysisPage() {
                         checked={pipeline === 'base'}
                         onChange={(e) => setPipeline(e.target.value as 'base' | 'base+')}
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                        disabled={forecastType === 'corrected' && mainPipeline !== 'base'}
                       />
                       <span className="text-sm text-gray-700">base</span>
                     </label>
-                    <label className="flex items-center space-x-2 cursor-pointer">
+                    <label className={`flex items-center space-x-2 cursor-pointer ${forecastType === 'corrected' && mainPipeline !== 'base+' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                       <input
                         type="radio"
                         name="pipeline"
@@ -593,6 +648,7 @@ export function AnalysisPage() {
                         checked={pipeline === 'base+'}
                         onChange={(e) => setPipeline(e.target.value as 'base' | 'base+')}
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
+                        disabled={forecastType === 'corrected' && mainPipeline !== 'base+'}
                       />
                       <span className="text-sm text-gray-700">base+</span>
                     </label>
@@ -603,8 +659,9 @@ export function AnalysisPage() {
               <div className="space-y-3">
                 <Label className="text-gray-800 font-semibold">Модели</Label>
                 <div className="flex flex-wrap gap-2">
-                  {models.map((model) => {
-                    const isMainModel = mainModelLower && model.toLowerCase() === mainModelLower;
+                  {availableModelsForPipeline.map((model) => {
+                    // Модель считается целевой только если pipeline совпадает с mainPipeline и имя совпадает с mainModelLower
+                    const isMainModel = mainModelLower && model.toLowerCase() === mainModelLower && pipeline === mainPipeline;
                     const isDisabled = forecastType === 'corrected' && !isMainModel;
                     return (
                       <label key={model} className={`flex items-center gap-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
@@ -740,11 +797,11 @@ export function AnalysisPage() {
                           </thead>
                           <tbody>
                             {chartData.map(({ model, data }) => (
-                              <tr key={model} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${mainModelLower && model.toLowerCase() === mainModelLower ? 'bg-blue-50' : ''}`}>
+                              <tr key={model} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${(mainModelLower && model.toLowerCase() === mainModelLower && pipeline === mainPipeline) ? 'bg-blue-50' : ''}`}>
                                 <td className="py-4 px-4">
                                   <div className="flex items-center">
-                                    <span className={`font-medium ${mainModelLower && model.toLowerCase() === mainModelLower ? 'text-blue-900' : 'text-gray-900'}`}>{model}</span>
-                                    {mainModelLower && model.toLowerCase() === mainModelLower && (
+                                    <span className={`font-medium ${(mainModelLower && model.toLowerCase() === mainModelLower && pipeline === mainPipeline) ? 'text-blue-900' : 'text-gray-900'}`}>{model}</span>
+                                    {(mainModelLower && model.toLowerCase() === mainModelLower && pipeline === mainPipeline) && (
                                       <span className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-full">
                                         целевая
                                       </span>

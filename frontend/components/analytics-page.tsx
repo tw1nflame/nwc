@@ -96,7 +96,7 @@ export function AnalyticsPage() {
     <main className="flex-1 p-8">
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-2">Общая аналитика</h1>
-        <p className="text-gray-600 text-lg">Аналитика по результатам прогнозирования и обучению моделей</p>
+        <p className="text-gray-600 text-lg">Аналитика по результатам прогнозирования</p>
       </div>
       <div className="mb-6">
         <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row gap-4 items-center shadow-sm">
