@@ -158,7 +158,7 @@ async def root(request: Request):
 @require_authentication
 async def export_excel(request: Request):
     """
-    Экспортирует таблицы BASEPLUS pipeline в Excel и возвращает файл из памяти.
+    Экспортирует таблицы Excel и возвращает файл из памяти.
     """
     sheet_to_table = SHEET_TO_TABLE
     excel_bytes = export_pipeline_tables_to_excel(sheet_to_table, make_final_prediction=True)
@@ -252,12 +252,12 @@ async def export_article_stats(request: Request, article: str = Query(..., descr
 # Новый эндпоинт для скачивания Excel по статье с агрегацией
 @app.get("/download_article_excel/")
 @require_authentication
-async def download_article_excel(request: Request, article: str = Query(..., description="Название статьи")):
+async def download_article_excel(request: Request, article: str = Query(..., description="Название статьи"), pipeline: str = Query(None, description="Pipeline (base/base+)") ):
     """
-    Скачивание Excel-файла по одной статье с агрегацией (данные + агрегированная таблица)
+    Скачивание Excel-файла по одной статье с агрегацией (данные + агрегированная таблица), с фильтрацией по pipeline
     """
     try:
-        excel_bytes = export_article_with_agg_excel(article)
+        excel_bytes = export_article_with_agg_excel(article, pipeline=pipeline)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     filename = f"article_{article}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"

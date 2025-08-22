@@ -770,8 +770,6 @@ def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
             df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
         if df.empty:
             raise ValueError(f"Нет данных для статьи: {article_name} (pipeline={pipeline})")
-        # ...existing code...
-        # (rest of the function remains unchanged)
     except Exception as e:
         import traceback
         logger.error(f"[get_article_stats_excel] EXCEPTION: {e}", exc_info=True)
@@ -900,13 +898,14 @@ def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
     return output
 
 
-def export_article_with_agg_excel(article_name: str) -> BytesIO:
+def export_article_with_agg_excel(article_name: str, pipeline: str = None) -> BytesIO:
     """
     Возвращает Excel-файл с двумя таблицами:
     1. Все строки по статье (дата, факт, все модели в RUB и USD)
     2. Агрегированная таблица (метрика в первом столбце, далее значения по моделям)
     Между ними — пустая строка.
     """
+    
     config = load_config(CONFIG_PATH)
     usd_articles = config.get('Статьи для предикта в USD', [])
     article_name_db = article_name
@@ -915,9 +914,12 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
     db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = create_engine(db_url)
     # Основная таблица
-    df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
+    if pipeline:
+        df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s AND pipeline = %s', engine, params=(article_name_db, pipeline))
+    else:
+        df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE article = %s', engine, params=(article_name_db,))
     if df.empty:
-        raise ValueError(f"Нет данных для статьи: {article_name}")
+        raise ValueError(f"Нет данных для статьи: {article_name} (pipeline={pipeline})")
     df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
     # Курс
     rates_df = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', engine)
@@ -967,7 +969,7 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
         out_rows.append(out_row)
     df_main = pd.DataFrame(out_rows)
     # Получаем агрегированную таблицу через get_article_stats_excel
-    agg_excel = get_article_stats_excel(article_name)
+    agg_excel = get_article_stats_excel(article_name, pipeline=pipeline)
     agg_excel.seek(0)
     with pd.ExcelFile(agg_excel) as xls:
         stats_df = pd.read_excel(xls, sheet_name='Статистика', index_col=0)
@@ -992,8 +994,20 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
         workbook = writer.book
         worksheet = writer.sheets['Статья+Агрегация']
         config = load_config(CONFIG_PATH)
-        main_model = config.get('model_article', {}).get(article_name)
-        reserved_model = config.get('model_article_reserved_model', {}).get(article_name)
+        # --- pipeline-aware model extraction ---
+        def get_model_for_article(cfg_dict, article, pipeline):
+            val = cfg_dict.get(article)
+            if isinstance(val, dict):
+                if val.get('pipeline') == pipeline:
+                    return val.get('model')
+                else:
+                    return None
+            elif isinstance(val, str):
+                return val
+            return None
+
+        main_model = get_model_for_article(config.get('model_article', {}), article_name, pipeline)
+        reserved_model = get_model_for_article(config.get('model_article_reserved_model', {}), article_name, pipeline)
         all_cols = list(stats_df_for_write.columns)
         pct_col_idxs = [i for i, col in enumerate(all_cols) if '%' in col]
         label_row = [''] * len(all_cols)
@@ -1123,16 +1137,6 @@ def export_article_with_agg_excel(article_name: str) -> BytesIO:
     return output_final
 
 def get_bullet_chart_data() -> dict:
-    """
-    Возвращает данные для bullet-графика и курсы валют.
-    {
-        'data': [...],
-        'exchange_rates': [...]
-    }
-    """
-    logger = setup_custom_logging()
-    import psycopg2
-    import pandas as pd
     import sqlalchemy
     db_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = sqlalchemy.create_engine(db_url)
@@ -1146,34 +1150,53 @@ def get_bullet_chart_data() -> dict:
     config = load_config(CONFIG_PATH)
     model_article = config.get('model_article', {})
     usd_articles = config.get('Статьи для предикта в USD', [])
+    def get_model_and_pipeline_for_article(cfg_dict, article):
+        val = cfg_dict.get(article)
+        if isinstance(val, dict):
+            return val.get('model'), val.get('pipeline')
+        elif isinstance(val, str):
+            return val, None
+        return None, None
     try:
         df = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', engine)
         df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
         # Приводим все имена колонок к нижнему регистру для унификации поиска
         df.columns = [col.lower() for col in df.columns]
+        # Для каждой (дата, статья) ищем только строку с pipeline==целевой и берем predict_{model}*
         result = []
-        pipeline_articles = {}
+        # Словарь: (article_for_front, date) -> row
+        used_keys = set()
         for idx, row in df.iterrows():
             row_dict = {k.lower(): v for k, v in row.items()}
             article = row_dict.get('статья')
             date = row_dict.get('дата')
             pipeline_val = row_dict.get('pipeline')
-            base_article = article
-            if article and article.endswith('_USD'):
-                base_article = article[:-4]
-            model = model_article.get(base_article)
-            if not model:
-                # fallback to lower-case key if needed
-                model = model_article.get(base_article.lower())
-            diff_key = f'predict_{model} разница'.lower() if model else None
-            dev_key = f'predict_{model} отклонение %'.lower() if model else None
-            difference = row_dict.get(diff_key) if diff_key else None
-            deviation = row_dict.get(dev_key) if dev_key else None
+            if not article or date is None:
+                continue
+            # base_article без _USD
+            base_article = article[:-4] if article.endswith('_usd') else article
+            model, pipeline_cfg = get_model_and_pipeline_for_article(model_article, base_article)
+            if not model or not pipeline_cfg:
+                continue
+            # pipeline должен совпадать с config
+            if str(pipeline_val).lower() != str(pipeline_cfg).lower():
+                continue
+            # Для фронта статья без _USD
+            article_for_front = article[:-4] if article.endswith('_usd') else article
+            # Ключ для уникальности
+            key = (article_for_front, date)
+            if key in used_keys:
+                continue
+            used_keys.add(key)
+            # predict_{model} разница и predict_{model} отклонение %
+            diff_key = f'predict_{model} разница'.lower()
+            dev_key = f'predict_{model} отклонение %'.lower()
+            difference = row_dict.get(diff_key)
+            deviation = row_dict.get(dev_key)
             if isinstance(date, pd.Timestamp):
                 date_str = date.strftime('%Y-%m-%d')
             else:
                 date_str = str(date)
-
             def safe_float(val):
                 try:
                     f = float(val)
@@ -1182,13 +1205,6 @@ def get_bullet_chart_data() -> dict:
                     return f
                 except Exception:
                     return None
-
-            # Если статья в USD, возвращаем без _USD
-            article_for_front = article[:-4] if article and article.endswith('_USD') else article
-            # Сбор уникальных статей по pipeline
-            if pipeline_val not in pipeline_articles:
-                pipeline_articles[pipeline_val] = set()
-            pipeline_articles[pipeline_val].add(article_for_front)
             result.append({
                 'article': article_for_front,
                 'model': model,
@@ -1197,8 +1213,6 @@ def get_bullet_chart_data() -> dict:
                 'difference': safe_float(difference),
                 'pipeline': pipeline_val
             })
-        # Логгирование: какие статьи есть для каждого pipeline
-    # (print/logging removed)
         # Получить курсы валют
         try:
             if not EXCHANGE_RATE_TABLE:

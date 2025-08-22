@@ -1,4 +1,3 @@
-
 "use client"
 import { AnalysisGraphs } from "./analyze/graphs";
 import { ArticleDataTable } from "./analyze/ArticleDataTable";
@@ -676,7 +675,7 @@ export function AnalysisPage() {
                           onClick={async () => {
                             if (!selectedArticle) return;
                             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-                            const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}`;
+                            const url = backendUrl.replace(/\/$/, '') + `/download_article_excel/?article=${encodeURIComponent(selectedArticle)}&pipeline=${encodeURIComponent(pipeline)}`;
                             try {
                               const response = await fetch(url, {
                                 headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
