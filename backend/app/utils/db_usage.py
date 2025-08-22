@@ -1208,8 +1208,13 @@ def get_bullet_chart_data() -> dict:
             used_keys.add(key)
             diff_key = f'predict_{model} разница'
             dev_key = f'predict_{model} отклонение %'
-            difference = row_dict.get(diff_key)
-            deviation = row_dict.get(dev_key)
+            difference = None
+            deviation = None
+            for k, v in row_dict.items():
+                if k.lower() == diff_key.lower():
+                    difference = v
+                if k.lower() == dev_key.lower():
+                    deviation = v
             if article and 'Торговая ДЗ' in article:
                 logger.info(f"[get_bullet_chart_data] idx={idx} diff_key={diff_key} difference={difference} dev_key={dev_key} deviation={deviation}")
             if isinstance(date, pd.Timestamp):
