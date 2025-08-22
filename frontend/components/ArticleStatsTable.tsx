@@ -167,11 +167,22 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
 
   return (
     <CardContent>
-      <div className="overflow-x-auto">
+      <div style={{ overflowX: 'auto', position: 'relative' }}>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="py-2 px-3 border-b border-gray-200 text-left bg-gray-50 min-w-[210px]">Метрика</th>
+              <th
+                className="py-2 px-3 border-b border-gray-200 text-left bg-gray-50 min-w-[210px]"
+                style={{
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 2,
+                  background: 'white',
+                  boxShadow: '2px 0 0 0 #e5e7eb', // gray-200
+                }}
+              >
+                Метрика
+              </th>
               {columns.map((col) => (
                 <th key={col} className="py-2 px-3 border-b border-gray-200 text-center bg-gray-50">
                   {col}
@@ -186,17 +197,35 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
             {stats.map((row: any[], i: number) => (
               <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                 {row.map((cell: any, j: number) => {
-                  // Первый столбец — метрика, остальные — значения по колонкам
                   const isTarget = j > 0 && isTargetColumn(columns[j - 1]);
+                  if (j === 0) {
+                    return (
+                      <td
+                        key={j}
+                        style={{
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 1,
+                          background: 'white',
+                          boxShadow: '2px 0 0 0 #e5e7eb',
+                        }}
+                        className="py-2 px-3 font-medium text-gray-900 min-w-[210px]"
+                      >
+                        {cell === null || cell === undefined || Number.isNaN(cell)
+                          ? '-'
+                          : typeof cell === 'number'
+                            ? cell.toLocaleString(undefined, { maximumFractionDigits: 3 })
+                            : cell}
+                      </td>
+                    );
+                  }
                   return (
                     <td
                       key={j}
                       className={
-                        j === 0
-                          ? "py-2 px-3 font-medium text-gray-900 min-w-[210px]"
-                          : isTarget
-                            ? "py-2 px-3 text-center text-blue-700 font-semibold"
-                            : "py-2 px-3 text-center text-gray-700"
+                        isTarget
+                          ? "py-2 px-3 text-center text-blue-700 font-semibold"
+                          : "py-2 px-3 text-center text-gray-700"
                       }
                     >
                       {cell === null || cell === undefined || Number.isNaN(cell)
