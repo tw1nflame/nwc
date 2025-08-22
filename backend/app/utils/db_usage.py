@@ -564,210 +564,168 @@ def export_pipeline_tables_to_excel(sheet_to_table: dict, make_final_prediction:
 def collect_pipeline_tables_data(sheet_to_table: dict, make_final_prediction: bool = False, pipeline: str = None) -> dict:
     """
     Собирает все таблицы из sheet_to_table и связанные данные в dict датафреймов.
-    Оптимизированная версия: использует векторизованные операции и минимизирует запросы к БД.
+    Если указан pipeline, фильтрует строки по этому значению в столбце pipeline (если такой столбец есть в таблице).
     """
     logger = setup_custom_logging()
-    logger.info(f"Начало сбора таблиц (оптимизированный). Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
-
+    logger.info(f"Начало сбора таблиц. Таблицы: {list(sheet_to_table.keys())}, make_final_prediction: {make_final_prediction}")
+    
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    logger.info(f"Подключение к БД для сбора установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    config = load_config(CONFIG_PATH)
+    model_article = config.get('model_article', {})
     dataframes_dict = {}
-
-    # Шаг 1: Используем 'with' для безопасного управления соединением
     try:
-        with psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, dbname=DB_NAME
-        ) as conn:
-            logger.info(f"Подключение к БД для сбора установлено: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-
-            # Шаг 2: Загружаем общие данные (корректировки, курсы) ОДИН РАЗ в начале
-            df_adjustments = load_adjustments(conn, logger)
-            df_exchange_rates = load_exchange_rates(conn, logger)
-
-            if df_adjustments is not None:
-                dataframes_dict['Корректировки'] = df_adjustments.rename(columns=REVERSE_COLUMN_MAPPING)
-            if df_exchange_rates is not None:
-                dataframes_dict['Курсы валют'] = df_exchange_rates.rename(columns=REVERSE_COLUMN_MAPPING)
-
-            # Шаг 3: Оптимизированный блок для финального прогноза
-            if make_final_prediction:
-                df_final = create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments)
-                if df_final is not None:
-                    dataframes_dict['final_prediction'] = df_final
-
-            # Шаг 4: Загрузка остальных таблиц
-            for sheet, table in sheet_to_table.items():
-                if table is None:
-                    logger.warning(f"Пропуск листа {sheet}: таблица не указана")
-                    continue
-                
-                logger.info(f"Экспорт таблицы {table} в лист {sheet}")
-                query = f'SELECT * FROM {table}'
-                params = None
-                
-                # Фильтрация по pipeline на стороне БД (это эффективно)
-                if pipeline:
-                    cur = conn.cursor()
-                    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = %s AND column_name = 'pipeline'", (table,))
-                    if cur.fetchone():
-                        query += ' WHERE pipeline = %s'
-                        params = (pipeline,)
-                    cur.close()
-
-                df = pd.read_sql_query(query, conn, params=params)
-                df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
-                dataframes_dict[sheet] = df
-                logger.info(f"Лист {sheet} экспортирован: {len(df)} строк.")
-
-        logger.info("Сбор таблиц успешно завершен.")
+        # Финальный прогноз
+        if make_final_prediction:
+            logger.info("Создание финального предсказания")
+            if pipeline:
+                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE} WHERE pipeline = %s', conn, params=(pipeline,))
+            else:
+                df_data = pd.read_sql_query(f'SELECT * FROM {DATA_TABLE}', conn)
+            logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
+            try:
+                df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', conn)
+                logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df_adjustments)} строк")
+                df_adjustments['date'] = pd.to_datetime(
+                    df_adjustments['year'].astype(str) + '-' + 
+                    df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                ) + pd.offsets.MonthEnd(0)
+                if 'date' in df_data.columns:
+                    df_data['date'] = pd.to_datetime(df_data['date'])
+                    df_adjustments['date'] = pd.to_datetime(df_adjustments['date'])
+                    logger.info(f"Типы дат приведены к единому формату: df_data.date = {df_data['date'].dtype}, df_adjustments.date = {df_adjustments['date'].dtype}")
+                df_data = df_data.merge(
+                    df_adjustments[['date', 'article', 'adjustment_value', 'description']], 
+                    left_on=['date', 'article'], 
+                    right_on=['date', 'article'], 
+                    how='left'
+                )
+                df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
+                df_data['description'] = df_data['description'].fillna('')
+                logger.info(f"Данные объединены с корректировками: {len(df_data)} строк, корректировок с ненулевыми значениями: {(df_data['adjustment_value'] != 0).sum()}")
+            except Exception as adj_error:
+                logger.warning(f"Не удалось загрузить корректировки: {adj_error}")
+                df_data['adjustment_value'] = 0
+                df_data['description'] = ''
+                logger.info("Добавлены нулевые корректировки")
+            original_columns = list(df_data.columns)
+            df_data.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_data.columns]
+            mapped_columns = list(df_data.columns)
+            logger.info(f"Применено обратное маппинг колонок: {len(original_columns)} -> {len(mapped_columns)}")
+            final_rows = []
+            # Для каждой уникальной (дата, статья) ищем строку с pipeline из config и берём нужную predict-колонку
+            key_cols = ['Дата', 'Статья']
+            if 'Дата' not in df_data.columns or 'Статья' not in df_data.columns:
+                logger.error('Нет нужных колонок Дата/Статья в данных для финального прогноза')
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
+                dataframes_dict['final_prediction'] = df_final
+            else:
+                # Группируем по (Дата, Статья)
+                for (date, article), group in df_data.groupby(['Дата', 'Статья']):
+                    model_cfg = model_article.get(article)
+                    model_name = None
+                    pipeline_cfg = None
+                    if isinstance(model_cfg, dict):
+                        model_name = model_cfg.get('model')
+                        pipeline_cfg = model_cfg.get('pipeline')
+                    elif isinstance(model_cfg, str):
+                        model_name = model_cfg
+                        pipeline_cfg = None
+                    if not model_name:
+                        continue
+                    # Ищем строку с нужным pipeline
+                    if pipeline_cfg:
+                        row = group[group['pipeline'] == pipeline_cfg].head(1)
+                    else:
+                        row = group.head(1)
+                    if row.empty:
+                        continue
+                    row = row.iloc[0]
+                    pred_col = f'predict_{model_name}'
+                    mapped_pred_col = None
+                    for col in df_data.columns:
+                        if col.lower() == pred_col.lower():
+                            mapped_pred_col = col
+                            break
+                    if not mapped_pred_col:
+                        continue
+                    adjustment = row.get('Корректировка, руб', 0) or 0
+                    description = row.get('Описание', '') or ''
+                    final_rows.append({
+                        'Дата': date,
+                        'Статья': article,
+                        'Fact': row.get('Fact'),
+                        'Прогноз': row.get(mapped_pred_col),
+                        'Корректировка': adjustment,
+                        'Финальный прогноз': (row.get(mapped_pred_col) or 0) + (adjustment or 0),
+                        'Описание': description,
+                        'Модель': model_name
+                    })
+                df_final = pd.DataFrame(final_rows, columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
+                dataframes_dict['final_prediction'] = df_final
+        # Остальные листы
+        for sheet, table in sheet_to_table.items():
+            if table is None:
+                logger.warning(f"Пропуск листа {sheet}: таблица не указана")
+                continue
+            logger.info(f"Экспорт таблицы {table} в лист {sheet}")
+            # Проверяем, есть ли колонка pipeline в таблице
+            cur = conn.cursor()
+            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'pipeline'", (table,))
+            has_pipeline = cur.fetchone() is not None
+            if pipeline and has_pipeline:
+                df = pd.read_sql_query(f'SELECT * FROM {table} WHERE pipeline = %s', conn, params=(pipeline,))
+            else:
+                df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
+            original_columns = list(df.columns)
+            df.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df.columns]
+            mapped_columns = list(df.columns)
+            dataframes_dict[sheet] = df
+            logger.info(f"Лист {sheet} экспортирован: {len(df)} строк, колонки: {len(original_columns)} -> {len(mapped_columns)}")
+        # Корректировки
+        try:
+            df_adjustments = pd.read_sql_query(f'SELECT "article", "year", "month", "adjustment_value" FROM {ADJUSTMENTS_TABLE}', conn)
+            if not df_adjustments.empty:
+                df_adjustments['date'] = pd.to_datetime(
+                    df_adjustments['year'].astype(str) + '-' + 
+                    df_adjustments['month'].astype(str).str.zfill(2) + '-01'
+                ) + pd.offsets.MonthEnd(0)
+                df_adjustments = df_adjustments[['date', 'article', 'adjustment_value']]
+                logger.info(f"Экспорт корректировок: {len(df_adjustments)} строк")
+                df_adjustments.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_adjustments.columns]
+                dataframes_dict['Корректировки'] = df_adjustments
+                logger.info("Лист Корректировки добавлен")
+            else:
+                logger.info("Таблица корректировок пуста, лист не добавлен")
+        except Exception as adj_error:
+            logger.warning(f"Не удалось экспортировать корректировки: {adj_error}")
+            pass
+        # Курсы валют
+        try:
+            df_exchange_rates = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', conn)
+            if not df_exchange_rates.empty:
+                logger.info(f"Экспорт курсов валют: {len(df_exchange_rates)} строк")
+                df_exchange_rates.columns = [REVERSE_COLUMN_MAPPING.get(col, col) for col in df_exchange_rates.columns]
+                dataframes_dict['Курсы валют'] = df_exchange_rates
+                logger.info("Лист Курсы валют добавлен")
+            else:
+                logger.info("Таблица курсов валют пуста, лист не добавлен")
+        except Exception as rate_error:
+            logger.warning(f"Не удалось экспортировать курсы валют: {rate_error}")
+            pass
         return dataframes_dict
-
     except Exception as e:
         logger.error(f"Ошибка при сборе таблиц: {e}", exc_info=True)
         raise e
     finally:
-        logger.info("Соединение с БД для сбора закрыто (через 'with' или 'finally').")
-
-
-# Вспомогательные функции для чистоты кода
-def load_adjustments(conn, logger) -> pd.DataFrame | None:
-    try:
-        df = pd.read_sql_query(
-            f'SELECT "article", "year", "month", "adjustment_value", "description" FROM {ADJUSTMENTS_TABLE}', 
-            conn
-        )
-        if df.empty:
-            logger.info("Таблица корректировок пуста.")
-            return None
-        
-        df['date'] = pd.to_datetime(
-            df['year'].astype(str) + '-' + df['month'].astype(str).str.zfill(2) + '-01'
-        ) + pd.offsets.MonthEnd(0)
-        logger.info(f"Загружены корректировки из {ADJUSTMENTS_TABLE}: {len(df)} строк")
-        return df[['date', 'article', 'adjustment_value', 'description']]
-    except Exception as e:
-        logger.warning(f"Не удалось загрузить корректировки: {e}")
-        return None
-
-def load_exchange_rates(conn, logger) -> pd.DataFrame | None:
-    try:
-        df = pd.read_sql_query(f'SELECT * FROM {EXCHANGE_RATE_TABLE}', conn)
-        if df.empty:
-            logger.info("Таблица курсов валют пуста.")
-            return None
-        logger.info(f"Загружены курсы валют из {EXCHANGE_RATE_TABLE}: {len(df)} строк")
-        return df
-    except Exception as e:
-        logger.warning(f"Не удалось экспортировать курсы валют: {e}")
-        return None
-
-
-def create_final_prediction_vectorized(conn, logger, pipeline, df_adjustments) -> pd.DataFrame | None:
-    """Создает финальный прогноз, используя векторизованные операции (исправленная версия)."""
-    logger.info("Создание финального предсказания (векторизованный метод)")
-    
-    config = load_config(CONFIG_PATH)
-    model_article = config.get('model_article', {})
-
-    # 1. Загружаем основные данные
-    query = f'SELECT * FROM {DATA_TABLE}'
-    params = None
-    if pipeline:
-        query += ' WHERE pipeline = %s'
-        params = (pipeline,)
-    df_data = pd.read_sql_query(query, conn, params=params)
-    logger.info(f"Загружены данные из {DATA_TABLE}: {len(df_data)} строк")
-
-    # 2. Объединяем с корректировками (если они есть)
-    if df_adjustments is not None:
-        df_data['date'] = pd.to_datetime(df_data['date'])
-        df_data = df_data.merge(
-            df_adjustments, 
-            on=['date', 'article'],
-            how='left'
-        )
-        df_data['adjustment_value'] = df_data['adjustment_value'].fillna(0)
-        df_data['description'] = df_data['description'].fillna('')
-    else:
-        df_data['adjustment_value'] = 0
-        df_data['description'] = ''
-    
-    # 3. ***ИЗМЕНЕНИЕ***: НЕ переименовываем колонки здесь. 
-    # Работаем с 'date', 'article', 'adjustment_value' и т.д.
-    
-    # Проверяем наличие 'сырых' колонок
-    if 'date' not in df_data.columns or 'article' not in df_data.columns:
-        logger.error('Нет колонок date/article для финального прогноза')
-        return None
-
-    # 4. ВЕКТОРИЗАЦИЯ
-    # 4.1. Подготавливаем маппинги из конфига
-    article_to_model = {}
-    article_to_pipeline = {}
-    for article, cfg in model_article.items():
-        if isinstance(cfg, dict):
-            article_to_model[article] = cfg.get('model')
-            article_to_pipeline[article] = cfg.get('pipeline')
-        elif isinstance(cfg, str):
-            article_to_model[article] = cfg
-
-    # 4.2. Применяем маппинги (используем 'article', а не 'Статья')
-    df_data['target_model'] = df_data['article'].map(article_to_model)
-    df_data['target_pipeline'] = df_data['article'].map(article_to_pipeline)
-
-    # 4.3. Фильтруем строки
-    df_filtered = df_data.dropna(subset=['target_model']).copy()
-    correct_pipeline_mask = (df_filtered['pipeline'] == df_filtered['target_pipeline']) | (df_filtered['target_pipeline'].isnull())
-    df_filtered = df_filtered[correct_pipeline_mask]
-    
-    # 4.4. Оставляем первую подходящую запись (используем 'date', 'article')
-    df_final_candidates = df_filtered.sort_values(['date', 'article']).drop_duplicates(subset=['date', 'article'], keep='first')
-    
-    # 4.5. "Расплавляем" predict-колонки. 
-    # ***ИЗМЕНЕНИЕ***: `predict_` колонки тоже пока не переименовываем
-    predict_cols_db_names = [col for col in df_final_candidates.columns if col.startswith('predict_')]
-    if not predict_cols_db_names:
-        logger.error("В данных не найдено ни одной predict-колонки.")
-        # Создаем пустой DF с финальными, человекочитаемыми именами
-        return pd.DataFrame(columns=['Дата', 'Статья', 'Fact', 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель'])
-
-    id_vars = [col for col in df_final_candidates.columns if col not in predict_cols_db_names]
-    
-    df_melted = df_final_candidates.melt(
-        id_vars=id_vars,
-        value_vars=predict_cols_db_names,
-        var_name='predict_col_name',
-        value_name='prediction_value' # Временное имя
-    )
-    
-    # 4.6. Выбираем нужные прогнозы
-    df_melted['expected_predict_col'] = 'predict_' + df_melted['target_model']
-    final_rows_raw = df_melted[df_melted['predict_col_name'].str.lower() == df_melted['expected_predict_col'].str.lower()]
-
-    # 5. ***ИЗМЕНЕНИЕ***: Собираем итоговый датафрейм, ПЕРЕИМЕНОВЫВАЯ КОЛОНКИ НА ЭТОМ ШАГЕ
-    final_df = pd.DataFrame()
-    
-    # Используем .get() для безопасности, если какая-то колонка отсутствует
-    final_df['Дата'] = final_rows_raw.get('date')
-    final_df['Статья'] = final_rows_raw.get('article')
-    
-    # Ищем 'fact' колонку, применяя reverse mapping
-    fact_col_name_ru = REVERSE_COLUMN_MAPPING.get('fact', 'Fact')
-    final_df[fact_col_name_ru] = final_rows_raw.get('fact')
-    
-    final_df['Прогноз'] = final_rows_raw.get('prediction_value')
-    final_df['Корректировка'] = final_rows_raw.get('adjustment_value')
-    final_df['Описание'] = final_rows_raw.get('description')
-    final_df['Модель'] = final_rows_raw.get('target_model')
-    
-    # Теперь вычисление безопасно
-    final_df['Финальный прогноз'] = final_df['Прогноз'].fillna(0) + final_df['Корректировка'].fillna(0)
-    
-    # Приводим к нужному порядку колонок (используем имя Fact из маппинга)
-    output_columns = ['Дата', 'Статья', fact_col_name_ru, 'Прогноз', 'Корректировка', 'Финальный прогноз', 'Описание', 'Модель']
-    # Отфильтровываем колонки, которые могли не создаться (на случай отсутствия данных)
-    final_df = final_df[[col for col in output_columns if col in final_df.columns]]
-
-    logger.info(f"Финальный прогноз собран векторизованно: {len(final_df)} строк.")
-    return final_df
+        conn.close()
+        logger.info("Соединение с БД для сбора закрыто")
 
 
 def dataframes_to_excel(dataframes_dict: dict) -> BytesIO:
