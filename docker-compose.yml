@@ -14,12 +14,15 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./config_refined.yaml:/app/config_refined.yaml
+      # <--- ИЗМЕНЕНИЕ ПУТИ
+      # Конфиг теперь лежит в корне проекта внутри контейнера, то есть в /code
+      - ./config_refined.yaml:/code/config_refined.yaml
 
   celery:
     build:
       context: ./backend
     container_name: nwc-celery
+    # Эта команда теперь будет работать, т.к. WORKDIR в образе установлен на /code/app
     command: celery -A tasks worker --pool=prefork --loglevel=info
     env_file:
       - ./backend/.env
@@ -28,7 +31,8 @@ services:
       - redis
       - supabase
     volumes:
-      - ./config_refined.yaml:/app/config_refined.yaml
+      # <--- ИЗМЕНЕНИЕ ПУТИ
+      - ./config_refined.yaml:/code/config_refined.yaml
 
   frontend:
     build:

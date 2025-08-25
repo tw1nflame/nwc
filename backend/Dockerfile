@@ -1,18 +1,20 @@
-
 FROM python:3.11-slim
 
-WORKDIR /app
+# Создаем корневую директорию для всего кода
+WORKDIR /code
 
-# Копируем requirements.txt, .env и config_refined.yaml из backend
+# Копируем сначала requirements.txt для кэширования слоев Docker
 COPY requirements.txt ./
-COPY .env ./
-COPY config_refined.yaml ./
-
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Копируем весь остальной код из контекста (из папки backend)
+# Теперь у нас будет структура /code/app/main.py, /code/config_refined.yaml и т.д.
+COPY . .
 
-# Копируем всё содержимое app внутрь /app (main.py, tasks.py, utils/ и т.д.)
-COPY app/* ./
+# <--- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
+# Меняем рабочую директорию на ту, где лежит наше приложение.
+# Все последующие команды (CMD, ENTRYPOINT, RUN) будут выполняться из /code/app
+WORKDIR /code/app
 
-# Запуск только приложения, celery запускается отдельным процессом через docker-compose
+# Теперь эта команда будет запущена из /code/app и легко найдет main.py, tasks.py и utils/
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
