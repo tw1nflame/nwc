@@ -13,10 +13,6 @@ services:
       - supabase
     ports:
       - "8000:8000"
-    volumes:
-      # <--- ИЗМЕНЕНИЕ ПУТИ
-      # Конфиг теперь лежит в корне проекта внутри контейнера, то есть в /code
-      - ./config_refined.yaml:/code/config_refined.yaml
 
   celery:
     build:

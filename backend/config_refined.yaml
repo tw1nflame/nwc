@@ -128,17 +128,17 @@ models_to_use:
   TiDEModel: {}
   DirectTabularModel: {}
   RecursiveTabularModel: {}
-  # Chronos:
-  #   - model_path: pretrained_models/chronos-bolt-base
-  #     ag_args:
-  #       name_suffix: ZeroShot
-  #   - model_path: pretrained_models/chronos-bolt-small
-  #     ag_args:
-  #       name_suffix: ZeroShot
-  #   - model_path: pretrained_models/chronos-bolt-small
-  #     fine_tune: true
-  #     ag_args:
-  #       name_suffix: FineTuned
+  Chronos:
+    - model_path: pretrained_models/chronos-bolt-base
+      ag_args:
+        name_suffix: ZeroShot
+    - model_path: pretrained_models/chronos-bolt-small
+      ag_args:
+        name_suffix: ZeroShot
+    - model_path: pretrained_models/chronos-bolt-small
+      fine_tune: true
+      ag_args:
+        name_suffix: FineTuned
 TABPFNMIX_model:
   TABPFNMIX:
     model_path_regressor: 'pretrained_models/tabpfn-mix-1.0-regressor'

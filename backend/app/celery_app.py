@@ -1,8 +1,21 @@
 from celery import Celery
 import os
 
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+
+def build_redis_url():
+    url = os.environ.get('REDIS_URL')
+    if url:
+        return url
+    host = os.environ.get('REDIS_HOST', 'localhost')
+    port = os.environ.get('REDIS_PORT', '6379')
+    user = os.environ.get('REDIS_USER', '')
+    password = os.environ.get('REDIS_PASSWORD', '')
+    db = os.environ.get('REDIS_DB', '0')
+    auth = f"{user}:{password}@" if user or password else ""
+    return f"redis://{auth}{host}:{port}/{db}"
+
+CELERY_BROKER_URL = build_redis_url()
+CELERY_RESULT_BACKEND = build_redis_url()
 
 celery_app = Celery('tasks', broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
 

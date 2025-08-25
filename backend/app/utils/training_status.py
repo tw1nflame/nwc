@@ -16,8 +16,21 @@ class TrainingStatusManager:
         Args:
             redis_url: URL для подключения к Redis
         """
-        self.redis_url = redis_url or os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        self.redis_url = redis_url or self._build_redis_url()
         self.redis_client = redis.Redis.from_url(self.redis_url)
+
+    @staticmethod
+    def _build_redis_url():
+        url = os.environ.get('REDIS_URL')
+        if url:
+            return url
+        host = os.environ.get('REDIS_HOST', 'localhost')
+        port = os.environ.get('REDIS_PORT', '6379')
+        user = os.environ.get('REDIS_USER', '')
+        password = os.environ.get('REDIS_PASSWORD', '')
+        db = os.environ.get('REDIS_DB', '0')
+        auth = f"{user}:{password}@" if user or password else ""
+        return f"redis://{auth}{host}:{port}/{db}"
         
         # Ключи для хранения информации о прогрессе
         self.KEYS = {
