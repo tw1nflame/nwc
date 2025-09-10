@@ -18,7 +18,14 @@ class TrainingStatusManager:
         """
         self.redis_url = redis_url or self._build_redis_url()
         self.redis_client = redis.Redis.from_url(self.redis_url)
-
+        # Ключи для хранения информации о прогрессе
+        self.KEYS = {
+            'current_article': 'training_progress:current_article',
+            'total_articles': 'training_progress:total_articles', 
+            'processed_articles': 'training_progress:processed_articles',
+            'percentage': 'training_progress:percentage',
+            'current_task_id': 'current_train_task_id'
+        }
     @staticmethod
     def _build_redis_url():
         url = os.environ.get('REDIS_URL')
@@ -31,15 +38,6 @@ class TrainingStatusManager:
         db = os.environ.get('REDIS_DB', '0')
         auth = f"{user}:{password}@" if user or password else ""
         return f"redis://{auth}{host}:{port}/{db}"
-        
-        # Ключи для хранения информации о прогрессе
-        self.KEYS = {
-            'current_article': 'training_progress:current_article',
-            'total_articles': 'training_progress:total_articles', 
-            'processed_articles': 'training_progress:processed_articles',
-            'percentage': 'training_progress:percentage',
-            'current_task_id': 'current_train_task_id'
-        }
     
     def initialize_training(self, total_articles: int, task_id: str) -> None:
         """
