@@ -189,16 +189,16 @@ def run_base_plus_pipeline(
     # ----------------------------------
     # Предикт TABPFNMIX | BASE+ (отключено)
     # ----------------------------------
-        predict_TABPFNMIX, _, _ = generate_tabular_predictions(
-            df_tabular=df_tabular,
-            target_column=TARGET_COLUMN,
-            date_column=DATE_COLUMN,
-            months_to_predict=[CHOSEN_MONTH],
-            metric=METRIC.lower(),
-            models_to_use=TABPFNMIX_model
-        )
-        
-        predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
+    # predict_TABPFNMIX, _, _ = generate_tabular_predictions(
+    #     df_tabular=df_tabular,
+    #     target_column=TARGET_COLUMN,
+    #     date_column=DATE_COLUMN,
+    #     months_to_predict=[CHOSEN_MONTH],
+    #     metric=METRIC.lower(),
+    #     models_to_use=TABPFNMIX_model
+    # )
+    #
+    # predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
 
         # ----------------------------------
         # Формирование итогового файла с результатами предиктов | BASE+
@@ -267,7 +267,7 @@ def run_base_plus_pipeline(
             'predict_naive',
             'predict_TS_ML',
             'predict_ML_tabular',
-            'predict_TABPFNMIX'  # отключено
+            # 'predict_TABPFNMIX'  # отключено
         ]
 
         all_models = generate_svr_predictions(

@@ -87,7 +87,7 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
           ...d,
           model: meta?.model || d.model,
           difference: convertDifference(d.difference, d.date, d.article),
-          deviation: d.deviation
+          deviation: d.deviation * 100
         };
       })
     : [];

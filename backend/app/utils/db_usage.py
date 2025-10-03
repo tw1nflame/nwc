@@ -865,7 +865,7 @@ def get_article_stats_excel(article_name: str, pipeline: str = None) -> BytesIO:
             elif stat_type == 'max':
                 row[col] = np.max(vals[col])
             elif stat_type == 'gt5':
-                row[col] = (np.abs(vals[col]) > 5).sum()
+                row[col] = (np.abs(vals[col]) > 0.05).sum()
         # For monetary columns: compute for both base and target currency
         for col in monetary_cols:
             if 'Дата' not in period_df.columns:

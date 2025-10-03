@@ -136,8 +136,13 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
     });
     const filteredStats: any[][] = (rawStats as any[]).map((row: any[]) => {
       const out: any[] = [row[0]]; // metric name
-      (filteredIdx as number[]).forEach((idx: number) => {
-        out.push(row[idx + 1]); // +1 потому что первый столбец — метрика
+      (filteredIdx as number[]).forEach((idx: number, colIndex: number) => {
+        const value = row[idx + 1]; // +1 потому что первый столбец — метрика
+        const colName = filteredCols[colIndex];
+        const isPct = /отклонение\s*%/i.test(colName);
+        // Умножаем проценты на 100
+        const processedValue = isPct && typeof value === 'number' ? value * 100 : value;
+        out.push(processedValue);
       });
       return out;
     });

@@ -151,50 +151,50 @@ model_article:
     model: stacking_rfr
     pipeline: base+
   Прочая ДЗ:
-    model: svm9
+    model: ml_tabular
     pipeline: base+
   Авансы выданные и расходы будущих периодов:
-    model: linreg6_no_bias
+    model: ml_tabular
     pipeline: base+
   Прочие налоги к возмещению ST:
-    model: svm6
-    pipeline: base+
+    model: autoarima
+    pipeline: base
   Прочие налоговые обязательства:
-    model: stacking_rfr
-    pipeline: base+
+    model: autoarima
+    pipeline: base
   Задолженность перед персоналом:
-    model: svm12
-    pipeline: base+
+    model: tft
+    pipeline: base
   Резерв по неиспользованным отпускам:
     model: linreg9_with_bias
     pipeline: base+
   Краткосрочный резерв по премиям:
-    model: stacking_rfr
-    pipeline: base+
+    model: autoarima
+    pipeline: base
   Прочее:
+    model: naive
+    pipeline: base
+  Кредиторская задлолженность по ОС:
+    model: TS_ML
+    pipeline: base
+  Авансы полученные:
+    model: chronos_base
+    pipeline: base
+  Авансы полученные(металлы):
     model: svm6
     pipeline: base+
-  Кредиторская задлолженность по ОС:
-    model: stacking_rfr
-    pipeline: base+
-  Авансы полученные:
-    model: stacking_rfr
-    pipeline: base+
-  Авансы полученные(металлы):
-    model: linreg12_no_bias
-    pipeline: base+
   Торговая КЗ:
-    model: TS_ML
+    model: tabpfnmix
     pipeline: base+
   Авансовые платежи по налогу на прибыль:
-    model: linreg6_with_bias
-    pipeline: base+
+    model: stacking_rfr
+    pipeline: base
   Обязательства по налогу на прибыль:
-    model: linreg9_no_bias
-    pipeline: base+
-  ЧОК (нормализовано на расчеты с акционерами):
     model: naive
-    pipeline: base+
+    pipeline: base
+  ЧОК (нормализовано на расчеты с акционерами):
+    model: stacking_rfr
+    pipeline: base
 
 model_article_reserved_model:
   Торговая ДЗ:

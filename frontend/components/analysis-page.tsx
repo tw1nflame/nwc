@@ -296,6 +296,19 @@ export function AnalysisPage() {
 
 
 
+  // Автоматическое переключение pipeline при выборе скорректированного прогноза
+  useEffect(() => {
+    if (forecastType === 'corrected' && config && config.model_article && selectedArticle) {
+      const articleConfig = config.model_article[selectedArticle];
+      if (articleConfig && typeof articleConfig === 'object' && 'pipeline' in articleConfig) {
+        const targetPipeline = articleConfig.pipeline;
+        if (pipeline !== targetPipeline) {
+          setPipeline(targetPipeline);
+        }
+      }
+    }
+  }, [forecastType, selectedArticle, config, pipeline]);
+
   // Логгирование для отладки определения главной модели
   useEffect(() => {
   }, [selectedArticle, mainModel, config, models]);
@@ -497,7 +510,7 @@ export function AnalysisPage() {
             actual: factConv,
             forecast: forecastConv,
             difference: diffConv,
-            errorPercent: error, // проценты не конвертируем!
+            errorPercent: error ? error * 100 : error, // умножаем проценты на 100
             adjustments: adjustmentsConv,
           };
         })
@@ -571,6 +584,7 @@ export function AnalysisPage() {
                         checked={forecastType === 'original'}
                         onChange={(e) => {
                           setForecastType(e.target.value as 'original' | 'corrected');
+                          setSelectedModels([]);
                         }}
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
                       />
@@ -583,19 +597,8 @@ export function AnalysisPage() {
                         value="corrected"
                         checked={forecastType === 'corrected'}
                         onChange={(e) => {
-                          // mainPipeline нужно вычислить до setForecastType, иначе оно будет undefined
-                          let targetPipeline: 'base' | 'base+' | undefined = undefined;
-                          if (config && config.model_article && selectedArticle) {
-                            const articleConfig = config.model_article[selectedArticle];
-                            if (articleConfig && typeof articleConfig === 'object' && 'pipeline' in articleConfig) {
-                              targetPipeline = articleConfig.pipeline;
-                            }
-                          }
                           setForecastType(e.target.value as 'original' | 'corrected');
                           setSelectedModels([]);
-                          if (targetPipeline && pipeline !== targetPipeline) {
-                            setPipeline(targetPipeline);
-                          }
                         }}
                         className="w-4 h-4 accent-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500"
                       />
