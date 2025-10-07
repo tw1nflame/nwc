@@ -136,12 +136,15 @@ export const ArticleStatsTable: React.FC<ArticleStatsTableProps> = ({ article, c
     });
     const filteredStats: any[][] = (rawStats as any[]).map((row: any[]) => {
       const out: any[] = [row[0]]; // metric name
+      const metricName = row[0]; // название метрики
       (filteredIdx as number[]).forEach((idx: number, colIndex: number) => {
         const value = row[idx + 1]; // +1 потому что первый столбец — метрика
         const colName = filteredCols[colIndex];
         const isPct = /отклонение\s*%/i.test(colName);
-        // Умножаем проценты на 100
-        const processedValue = isPct && typeof value === 'number' ? value * 100 : value;
+        // Проверяем, содержит ли название метрики подстроку "Больше"
+        const isCountMetric = typeof metricName === 'string' && metricName.includes('Больше');
+        // Умножаем проценты на 100, кроме строк с "Больше 5%, шт."
+        const processedValue = isPct && typeof value === 'number' && !isCountMetric ? value * 100 : value;
         out.push(processedValue);
       });
       return out;

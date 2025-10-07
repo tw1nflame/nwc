@@ -158,6 +158,24 @@ def run_base_plus_pipeline(
         # Подготовка датасета для табличного предсказания
         # ----------------------------------
         df_tabular = df.copy()
+        
+        # Добавляем строку на месяц прогноза для BASE+ табличного прогноза
+        prediction_month = CHOSEN_MONTH + MonthEnd(0)
+        if prediction_month not in df_tabular[DATE_COLUMN].values:
+            # Создаем пустую строку для месяца прогноза
+            prediction_row = pd.DataFrame({
+                DATE_COLUMN: [prediction_month],
+                TARGET_COLUMN: [np.nan],  # Целевая переменная неизвестна
+                'item_id': [ITEM_ID],
+                'factor': [FACTOR]
+            })
+            # Добавляем NaN для всех признаков (будут заполнены lag-операциями)
+            for feature in FEATURES:
+                if feature in df_tabular.columns:
+                    prediction_row[feature] = np.nan
+            
+            df_tabular = pd.concat([df_tabular, prediction_row], ignore_index=True)
+        
         cols_for_lag = [col for col in df_tabular.columns if col not in (DATE_COLUMN, 'item_id', 'factor')]
         WINDOWS = [6, 9, 12]
 
@@ -169,7 +187,47 @@ def run_base_plus_pipeline(
                 df_tabular[f'{column}_lag_1_MAX_{WINDOW}'] = df_tabular[column].rolling(window=WINDOW).max().shift(1)
 
         df_tabular = df_tabular.drop(columns=[column for column in cols_for_lag if column != TARGET_COLUMN])
-        df_tabular = df_tabular.dropna()
+        
+        # Диагностика перед dropna
+        print(f"DEBUG: df_tabular shape before dropna: {df_tabular.shape}")
+        print(f"DEBUG: df_tabular columns: {df_tabular.columns.tolist()}")
+        print(f"DEBUG: df_tabular null counts:")
+        print(df_tabular.isnull().sum())
+        print(f"DEBUG: df_tabular date range: {df_tabular[DATE_COLUMN].min()} to {df_tabular[DATE_COLUMN].max()}")
+        
+        # Проверяем строку с прогнозной датой
+        prediction_month = CHOSEN_MONTH + MonthEnd(0)
+        prediction_row = df_tabular[df_tabular[DATE_COLUMN] == prediction_month]
+        if not prediction_row.empty:
+            print(f"DEBUG: Prediction row found for {prediction_month}")
+            print(f"DEBUG: Prediction row shape: {prediction_row.shape}")
+            null_features = prediction_row.isnull().sum()
+            null_features = null_features[null_features > 0]
+            if not null_features.empty:
+                print(f"DEBUG: NaN features in prediction row:")
+                for feature, count in null_features.items():
+                    print(f"  {feature}: {count} NaN values")
+                    print(f"  Value: {prediction_row[feature].iloc[0]}")
+            else:
+                print("DEBUG: No NaN features in prediction row")
+        else:
+            print(f"DEBUG: No prediction row found for {prediction_month}")
+        
+        # Исключаем строку прогноза из dropna, чтобы она не удалилась
+        prediction_mask = df_tabular[DATE_COLUMN] == prediction_month
+        prediction_row = df_tabular[prediction_mask].copy()
+        other_rows = df_tabular[~prediction_mask].copy()
+        
+        # Применяем dropna только к остальным строкам
+        other_rows_clean = other_rows.dropna()
+        
+        # Объединяем обратно
+        df_tabular = pd.concat([other_rows_clean, prediction_row], ignore_index=True)
+        df_tabular = df_tabular.sort_values(by=DATE_COLUMN).reset_index(drop=True)
+        
+        print(f"DEBUG: df_tabular shape after dropna: {df_tabular.shape}")
+        print(f"DEBUG: TARGET_COLUMN: {TARGET_COLUMN}")
+        print(f"DEBUG: CHOSEN_MONTH: {CHOSEN_MONTH}")
 
         # ----------------------------------
         # Предикт Tabular AutoML | BASE+

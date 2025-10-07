@@ -320,8 +320,26 @@ def generate_tabular_predictions(
         print(f'Прогнозируем для месяца: {month.strftime("%Y-%m-%d")}')
         
         # Подготовка данных
-        train_data = df_tabular[df_tabular[date_column] < month].drop(columns=[date_column])
-        test_data = df_tabular[df_tabular[date_column] == month].drop(columns=[target_column, date_column])
+        print(f"DEBUG: df_tabular shape: {df_tabular.shape}")
+        print(f"DEBUG: df_tabular dates: {df_tabular[date_column].unique()}")
+        print(f"DEBUG: target_column: {target_column}")
+        print(f"DEBUG: month for prediction: {month}")
+        
+        train_filter = df_tabular[date_column] < month
+        test_filter = df_tabular[date_column] == month
+        
+        print(f"DEBUG: train_filter matches: {train_filter.sum()}")
+        print(f"DEBUG: test_filter matches: {test_filter.sum()}")
+        
+        train_data = df_tabular[train_filter].drop(columns=[date_column])
+        test_data = df_tabular[test_filter].drop(columns=[target_column, date_column])
+        
+        print(f"DEBUG: train_data shape: {train_data.shape}")
+        print(f"DEBUG: test_data shape: {test_data.shape}")
+        
+        if test_data.empty:
+            print(f"WARNING: test_data is empty for month {month}")
+            continue
         
         # Обучение модели
         predictor = TabularPredictor(
