@@ -10,7 +10,8 @@ import io
 import re
 from typing import Dict
 from utils.column_mapping import COLUMN_MAPPING
-from fastapi.responses import FileResponse
+from celery.result import AsyncResult
+from utils.training_status import training_status_manager
 
 router = APIRouter()
 load_dotenv()
@@ -164,3 +165,39 @@ async def download_logs_archive(word: str = Form(...)):
 				archive.write(abs_path, arc_name)
 		tmp_zip_path = tmp_zip.name
 	return FileResponse(tmp_zip_path, filename="logs.zip", media_type="application/zip")
+
+
+# --- 5. Остановить текущую задачу и очистить Redis ---
+@router.post('/stop-and-clear')
+async def stop_and_clear_training(word: str = Form(...)):
+	"""
+	Останавливает текущую задачу обучения и полностью очищает Redis
+	"""
+	if not SECRET_WORD:
+		raise HTTPException(status_code=500, detail="SECRET_WORD не задан в .env")
+	if word != SECRET_WORD:
+		raise HTTPException(status_code=403, detail="Секретное слово неверно")
+	
+	# Получаем ID текущей задачи
+	task_id = training_status_manager.get_current_task_id()
+	
+	stopped_task = None
+	if task_id:
+		# Останавливаем задачу
+		res = AsyncResult(task_id)
+		if res.state in ['PENDING', 'STARTED', 'RETRY']:
+			# Останавливаем с терминацией
+			if os.name == 'nt':  # Windows
+				res.revoke(terminate=True, signal='SIGTERM')
+			else:  # Linux/Unix
+				res.revoke(terminate=True, signal='SIGKILL')
+			stopped_task = task_id
+	
+	# Полностью очищаем Redis
+	training_status_manager.clear_training_progress()
+	
+	return {
+		"ok": True,
+		"message": "Задача остановлена и Redis очищен",
+		"stopped_task_id": stopped_task
+	}

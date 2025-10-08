@@ -25,3 +25,11 @@ export async function uploadOldForecast(word, file) {
   const res = await fetch(url, { method: 'POST', body: form });
   return await res.json();
 }
+
+export async function stopAndClearTraining(word) {
+  const form = new FormData();
+  form.append('word', word);
+  const url = backendUrl.replace(/\/$/, '') + '/stop-and-clear';
+  const res = await fetch(url, { method: 'POST', body: form });
+  return await res.json();
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { checkSecretWord, downloadLogsArchive, uploadOldForecast } from "./utils/techAccessApi";
+import { checkSecretWord, downloadLogsArchive, uploadOldForecast, stopAndClearTraining } from "./utils/techAccessApi";
 
 export const TechAccessPanel: React.FC = () => {
   const [secret, setSecret] = useState("");
@@ -10,8 +10,10 @@ export const TechAccessPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [stopLoading, setStopLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [stopMsg, setStopMsg] = useState<string | null>(null);
 
   const checkSecret = async () => {
     setLoading(true);
@@ -69,6 +71,24 @@ export const TechAccessPanel: React.FC = () => {
     }
   };
 
+  const stopAndClear = async () => {
+    setStopLoading(true);
+    setStopMsg(null);
+    setError(null);
+    try {
+      const data = await stopAndClearTraining(secret);
+      if (data.ok) {
+        setStopMsg(data.message || "Задача остановлена и Redis очищен");
+      } else {
+        setError(data.detail || "Ошибка остановки");
+      }
+    } catch (e) {
+      setError("Ошибка остановки задачи");
+    } finally {
+      setStopLoading(false);
+    }
+  };
+
   return (
     <div className="p-4 border rounded bg-gray-50 mt-4">
       <div className="font-semibold mb-2">Скачать логи</div>
@@ -101,6 +121,17 @@ export const TechAccessPanel: React.FC = () => {
           >
             {logLoading ? "Скачивание..." : "Скачать логи (архив)"}
           </button>
+          
+          <div className="font-semibold mb-2 mt-4">Экстренная остановка</div>
+          <button
+            className="bg-red-600 text-white rounded px-3 py-1 disabled:opacity-60"
+            onClick={stopAndClear}
+            disabled={stopLoading}
+          >
+            {stopLoading ? "Остановка..." : "Остановить задачу и очистить Redis"}
+          </button>
+          {stopMsg && <div className="text-green-700 text-sm mt-1">{stopMsg}</div>}
+          
           <div className="font-semibold mb-2 mt-4">Загрузить старый прогноз</div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
