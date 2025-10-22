@@ -24,7 +24,9 @@ class TrainingStatusManager:
             'total_articles': 'training_progress:total_articles', 
             'processed_articles': 'training_progress:processed_articles',
             'percentage': 'training_progress:percentage',
-            'current_task_id': 'current_train_task_id'
+            'current_task_id': 'current_train_task_id',
+            # Глобальный статус завершенного обучения (видят ВСЕ пользователи)
+            'last_completed_training': 'last_completed_training'
         }
     @staticmethod
     def _build_redis_url():
@@ -115,10 +117,19 @@ class TrainingStatusManager:
     
     def clear_training_progress(self) -> None:
         """
-        Очистка информации о прогрессе обучения
+        Очистка информации о прогрессе обучения.
+        НЕ удаляет last_completed_training - это глобальный статус для всех пользователей.
         """
         try:
-            for key in self.KEYS.values():
+            # Удаляем только данные прогресса, НЕ трогаем глобальный статус
+            keys_to_clear = [
+                self.KEYS['current_article'],
+                self.KEYS['total_articles'],
+                self.KEYS['processed_articles'],
+                self.KEYS['percentage'],
+                self.KEYS['current_task_id']
+            ]
+            for key in keys_to_clear:
                 self.redis_client.delete(key)
         except Exception as e:
             print(f"Error clearing training progress: {e}")
@@ -161,12 +172,57 @@ class TrainingStatusManager:
     def clear_completed_status(self) -> None:
         """
         Очистка статуса завершенного обучения (по кнопке ОК)
+        УСТАРЕЛО: Теперь не используется, статус очищается при запуске нового обучения
         """
         try:
             self.redis_client.delete(self.KEYS['current_task_id'])
             # Оставляем данные прогресса для возможного отображения
         except Exception as e:
             print(f"Error clearing completed status: {e}")
+    
+    def save_completed_training(self, training_data: Dict[str, Any]) -> None:
+        """
+        Сохраняет информацию о последнем завершенном обучении.
+        Этот статус видят ВСЕ пользователи до запуска нового обучения.
+        
+        Args:
+            training_data: Данные о завершенном обучении (status, message, result_file и т.д.)
+        """
+        try:
+            import json
+            self.redis_client.set(
+                self.KEYS['last_completed_training'], 
+                json.dumps(training_data),
+                ex=86400  # TTL 24 часа (на случай, если долго не будет новых обучений)
+            )
+        except Exception as e:
+            print(f"Error saving completed training: {e}")
+    
+    def get_last_completed_training(self) -> Optional[Dict[str, Any]]:
+        """
+        Получает информацию о последнем завершенном обучении.
+        Возвращает данные, которые видят ВСЕ пользователи.
+        
+        Returns:
+            Словарь с данными о завершенном обучении или None
+        """
+        try:
+            import json
+            data = self.redis_client.get(self.KEYS['last_completed_training'])
+            return json.loads(data.decode()) if data else None
+        except Exception as e:
+            print(f"Error getting last completed training: {e}")
+            return None
+    
+    def clear_last_completed_training(self) -> None:
+        """
+        Очищает информацию о последнем завершенном обучении.
+        Вызывается только при запуске НОВОГО обучения.
+        """
+        try:
+            self.redis_client.delete(self.KEYS['last_completed_training'])
+        except Exception as e:
+            print(f"Error clearing last completed training: {e}")
 
 
 # Singleton instance для использования в приложении

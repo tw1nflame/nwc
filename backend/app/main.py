@@ -63,15 +63,20 @@ async def train(
     date: str = Form(...),
     data_file: UploadFile = File(...)
 ):
-    # Проверяем, не выполняется ли уже обучение
+    # Проверяем, есть ли АКТИВНАЯ задача (не завершенная!)
     task_id = training_status_manager.get_current_task_id()
     if task_id:
         res = AsyncResult(task_id)
+        # Блокируем только если задача реально выполняется
         if res.state in ['PENDING', 'STARTED', 'RETRY']:
             raise HTTPException(
                 status_code=409,
                 detail="Обучение уже выполняется. Дождитесь завершения или остановите текущую задачу."
             )
+    
+    # ✅ Запуск нового обучения — очищаем ГЛОБАЛЬНЫЙ статус
+    # Теперь ВСЕ пользователи перестанут видеть старое "Прогноз готов"
+    training_status_manager.clear_last_completed_training()
     
     data_path = os.path.join(TRAINING_FILES_DIR, f"uploaded_data_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     with open(data_path, "wb") as f:
@@ -80,8 +85,7 @@ async def train(
     items_list = _json.loads(items)
     result_file_name = os.path.join(RESULTS_DIR, f"predict_{pipeline}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     celery_task = train_task.apply_async(args=[pipeline, items_list, date, data_path, result_file_name])
-    # Сохраняем актуальный task_id через training_status_manager
-    training_status_manager.set_current_task_id(celery_task.id)
+    # task_id будет установлен внутри задачи через initialize_training
     return {"status": "ok", "task_id": celery_task.id}
 
 @app.get("/current_task_id")
@@ -95,31 +99,44 @@ async def get_current_task_id(request: Request):
 @app.get("/train_status/")
 @require_authentication
 async def train_status(request: Request):
+    # 1. Проверяем, есть ли АКТИВНАЯ задача
     task_id = training_status_manager.get_current_task_id()
-    if not task_id:
-        return {"status": "idle"}
     
-    res = AsyncResult(task_id)
-    progress = training_status_manager.get_training_progress()
-    
-    if res.state == 'PENDING':
-        return {"status": "pending", **progress}
-    elif res.state == 'STARTED':
-        return {"status": "running", **progress}
-    elif res.state == 'SUCCESS':
-        result = res.result
-        # НЕ очищаем task_id, чтобы статус "done" сохранялся
-        return {"status": "done", **(result if isinstance(result, dict) else {})}
-    elif res.state == 'FAILURE':
-        # Очищаем прогресс после ошибки
-        training_status_manager.clear_training_progress()
-        return {"status": "error", "error": str(res.result)}
-    elif res.state == 'REVOKED':
-        # Очищаем прогресс после отмены
-        training_status_manager.clear_training_progress()
-        return {"status": "revoked", "message": "Training was stopped"}
+    if task_id:
+        # Есть активная задача — проверяем её состояние
+        res = AsyncResult(task_id)
+        progress = training_status_manager.get_training_progress()
+        
+        if res.state == 'PENDING':
+            return {"status": "pending", **progress}
+        elif res.state == 'STARTED':
+            return {"status": "running", **progress}
+        elif res.state == 'SUCCESS':
+            # Задача завершилась УСПЕШНО
+            # task_id уже должен быть очищен самой задачей, но проверим
+            last_training = training_status_manager.get_last_completed_training()
+            if last_training:
+                return last_training
+            else:
+                # Fallback
+                return {"status": "done", "message": "Обучение завершено"}
+        elif res.state == 'FAILURE':
+            training_status_manager.clear_training_progress()
+            return {"status": "error", "error": str(res.result)}
+        elif res.state == 'REVOKED':
+            training_status_manager.clear_training_progress()
+            return {"status": "revoked", "message": "Training was stopped"}
+        else:
+            return {"status": res.state.lower(), **progress}
     else:
-        return {"status": res.state.lower(), **progress}
+        # 2. Нет активной задачи — проверяем глобальный статус последнего завершенного обучения
+        last_training = training_status_manager.get_last_completed_training()
+        if last_training:
+            # ✅ Есть завершенное обучение — показываем ВСЕМ пользователям
+            return last_training
+        else:
+            # Нет ни активной задачи, ни завершенного обучения
+            return {"status": "idle"}
 
 @app.post("/stop_train/")
 @require_authentication
@@ -135,6 +152,13 @@ async def stop_train(request: Request):
     else:  # Linux/Unix
         res.revoke(terminate=True, signal='SIGKILL')
     
+    # Сохраняем глобальный статус остановки
+    training_status_manager.save_completed_training({
+        'status': 'revoked',
+        'message': 'Обучение было остановлено',
+        'completed_at': datetime.now().isoformat()
+    })
+    
     # Очищаем прогресс при остановке
     training_status_manager.clear_training_progress()
     
@@ -144,9 +168,13 @@ async def stop_train(request: Request):
 @require_authentication
 async def clear_status(request: Request):
     """
-    Очистка статуса завершенного обучения (кнопка ОК на фронтенде)
+    Очистка статуса завершенного обучения (кнопка ОК на фронтенде).
+    ПРИМЕЧАНИЕ: В новой архитектуре кнопка ОК не обязательна.
+    Глобальный статус автоматически очищается при запуске нового обучения.
+    Этот эндпоинт оставлен для обратной совместимости и может использоваться
+    для явной очистки статуса, если пользователь хочет убрать уведомление.
     """
-    training_status_manager.clear_completed_status()
+    training_status_manager.clear_last_completed_training()
     return {"status": "cleared"}
 
 @app.get("/")

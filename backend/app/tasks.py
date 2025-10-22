@@ -118,15 +118,38 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             upload_pipeline_result_to_db(result_file_name, SHEET_TO_TABLE, date, DATE_COLUMN, pipeline='base')
             logger.info("Данные BASE загружены в БД")
         
-        # НЕ очищаем прогресс при успешном завершении - оставляем task_id
-        # для отображения статуса "done" до нажатия кнопки ОК
+        # При успешном завершении:
+        # 1. Очищаем current_article (больше не обрабатываем)
+        training_status_manager.update_current_article('')
+        
+        # 2. Сохраняем ГЛОБАЛЬНЫЙ статус для ВСЕХ пользователей
+        training_status_manager.save_completed_training({
+            'status': 'done',
+            'message': 'Прогноз готов. Данные сохранены в БД и готовы к выгрузке!',
+            'pipeline': pipeline,
+            'date': date,
+            'completed_at': datetime.now().isoformat()
+        })
+        
+        # 3. ВАЖНО: Очищаем current_task_id - разблокируем запуск нового обучения
+        training_status_manager.redis_client.delete(training_status_manager.KEYS['current_task_id'])
         
         logger.info(f"✅ Задача train_task успешно завершена: {result_file_name}")
-        return {"status": "done", "result_file": os.path.basename(result_file_name)}
+        return {"status": "done"}
         
     except Exception as e:
         logger.error(f"❌ Ошибка в задаче train_task: {e}", exc_info=True)
-        # Очищаем прогресс при ошибке или отмене
+        
+        # При ошибке также сохраняем глобальный статус
+        training_status_manager.save_completed_training({
+            'status': 'error',
+            'message': f'Ошибка при обучении: {str(e)}',
+            'error': str(e),
+            'completed_at': datetime.now().isoformat()
+        })
+        
+        # Очищаем current_task_id и прогресс
+        training_status_manager.redis_client.delete(training_status_manager.KEYS['current_task_id'])
         training_status_manager.clear_training_progress()
         
         # Проверяем, была ли задача отменена

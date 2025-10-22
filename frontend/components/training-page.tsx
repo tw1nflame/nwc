@@ -241,6 +241,7 @@ function StatusIndicator({ trainStatus, onClearStatus, accessToken }: { trainSta
           color: "green",
           icon: CheckCircle,
           text: "Прогноз готов. Данные сохранены в БД и готовы к выгрузке!",
+          subtext: "Статус автоматически очистится при запуске нового обучения",
           bgClass: "bg-emerald-50 border-emerald-200 text-emerald-800",
           iconClass: "text-emerald-600",
         }
@@ -287,16 +288,32 @@ function StatusIndicator({ trainStatus, onClearStatus, accessToken }: { trainSta
       className="space-y-4"
     >
       {/* Основной статус */}
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass} font-medium`}>
-        {Icon && <Icon className={`w-5 h-5 ${config.iconClass}`} />}
-        <span>{config.text}</span>
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${config.bgClass}`}>
+        <div className="flex items-center gap-3 flex-1">
+          {Icon && <Icon className={`w-5 h-5 ${config.iconClass}`} />}
+          <div className="flex-1">
+            <span className="font-medium">{config.text}</span>
+            {config.subtext && (
+              <p className="text-xs mt-1 opacity-75">{config.subtext}</p>
+            )}
+            {/* Показываем детали завершенного обучения */}
+            {trainStatus?.status === "done" && (trainStatus?.pipeline || trainStatus?.date) && (
+              <div className="text-xs mt-2 space-y-0.5 opacity-90">
+                {trainStatus?.pipeline && <p>Алгоритм: {trainStatus.pipeline}</p>}
+                {trainStatus?.date && <p>Дата прогноза: {new Date(trainStatus.date).toLocaleDateString()}</p>}
+                {trainStatus?.completed_at && <p>Завершено: {new Date(trainStatus.completed_at).toLocaleString()}</p>}
+              </div>
+            )}
+          </div>
+        </div>
         {trainStatus?.status === "done" && (
           <Button
             size="sm"
             onClick={handleClearStatus}
-            className="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4"
+            variant="ghost"
+            className="ml-auto text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 px-3"
           >
-            ОК
+            Скрыть
           </Button>
         )}
       </div>
@@ -591,8 +608,12 @@ export default function TrainingPage() {
       // Логируем ответ от train_status
       if (!ignore) {
         setTrainStatus(status && status.status ? status : { status: "idle" })
-        if (status.status === "running") setPolling(true)
-        else setPolling(false)
+        // Запускаем polling если обучение активно (running или pending)
+        if (status.status === "running" || status.status === "pending") {
+          setPolling(true)
+        } else {
+          setPolling(false)
+        }
       }
     }
     checkStatus()
@@ -607,7 +628,8 @@ export default function TrainingPage() {
       const status = await fetchTrainStatus(accessToken)
       // Логируем ответ от train_status при polling
       setTrainStatus(status && status.status ? status : { status: "idle" })
-      if (status.status !== "running") {
+      // Останавливаем polling если обучение не активно
+      if (status.status !== "running" && status.status !== "pending") {
         setPolling(false)
       }
     }, 2000)
@@ -619,12 +641,19 @@ export default function TrainingPage() {
     setPolling(true)
   }
 
-  const handleStop = () => {
-    setTrainStatus({ status: "revoked" })
+  const handleStop = async () => {
+    // После остановки задачи через API, обновляем статус через polling
+    // API сохранит глобальный статус "revoked", который получим при следующем запросе
     setPolling(false)
+    // Немедленно обновляем статус
+    const status = await fetchTrainStatus(accessToken)
+    setTrainStatus(status && status.status ? status : { status: "idle" })
   }
 
-  const handleClearStatus = () => {
+  const handleClearStatus = async () => {
+    // Вызываем API для очистки глобального статуса
+    await clearTrainStatus(accessToken)
+    // Обновляем локальный статус
     setTrainStatus({ status: "idle" })
     setPolling(false)
   }
