@@ -51,6 +51,10 @@ def run_base_plus_pipeline(
         prev_predicts_file,
         status_manager=None
     ):
+    
+    # Очистка папок с моделями перед началом обучения BASE+
+    logger.info("🧹 Очистка папок с моделями перед началом обучения BASE+...")
+    cleanup_model_folders(logger=logger)
 
     result_dfs = []
     linreg_w_intercept_weights_dfs = []
@@ -60,6 +64,7 @@ def run_base_plus_pipeline(
     feature_importance_dfs = []
 
     for target, features in ITEMS_TO_PREDICT.items():    # <!> Должны быть переданы статьи из интерфейса. st.session_state['items_to_predict']
+
         TARGET_COLUMN = target
         FEATURES = features
 
@@ -247,16 +252,16 @@ def run_base_plus_pipeline(
     # ----------------------------------
     # Предикт TABPFNMIX | BASE+ (отключено)
     # ----------------------------------
-    # predict_TABPFNMIX, _, _ = generate_tabular_predictions(
-    #     df_tabular=df_tabular,
-    #     target_column=TARGET_COLUMN,
-    #     date_column=DATE_COLUMN,
-    #     months_to_predict=[CHOSEN_MONTH],
-    #     metric=METRIC.lower(),
-    #     models_to_use=TABPFNMIX_model
-    # )
-    #
-    # predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
+        predict_TABPFNMIX, _, _ = generate_tabular_predictions(
+            df_tabular=df_tabular,
+            target_column=TARGET_COLUMN,
+            date_column=DATE_COLUMN,
+            months_to_predict=[CHOSEN_MONTH],
+            metric=METRIC.lower(),
+            models_to_use=TABPFNMIX_model
+        )
+        
+        predict_TABPFNMIX = predict_TABPFNMIX.rename(columns={'predict': 'predict_TABPFNMIX'})
 
         # ----------------------------------
         # Формирование итогового файла с результатами предиктов | BASE+
@@ -270,6 +275,10 @@ def run_base_plus_pipeline(
         )
         all_models["Статья"] = TARGET_COLUMN
 
+        # Сохраняем факт за предыдущий месяц ПЕРЕД удалением строк
+        prev_month = CHOSEN_MONTH - MonthEnd(1)
+        prev_month_fact_value = all_models.loc[all_models[DATE_COLUMN] == prev_month, 'Fact'].values
+        
         all_models = all_models.dropna(subset=["predict_TS_ML"]).reset_index(drop=True)
 
         # ----------------------------------
@@ -280,6 +289,15 @@ def run_base_plus_pipeline(
         prev_predicts = prev_predicts.loc[prev_predicts['Статья'] == TARGET_COLUMN]
         cols_to_use = [col for col in prev_predicts.columns if ('разница' not in col) and ('отклонение' not in col)]
         prev_predicts = prev_predicts.loc[:, cols_to_use]
+        
+        # Обновляем факт предыдущего месяца в prev_predicts ТОЛЬКО если там NaN
+        if len(prev_month_fact_value) > 0 and not pd.isna(prev_month_fact_value[0]):
+            mask = prev_predicts[DATE_COLUMN] == prev_month
+            if mask.any():
+                # Проверяем, что Fact в prev_predicts для этого месяца == NaN
+                if pd.isna(prev_predicts.loc[mask, 'Fact'].values[0]):
+                    prev_predicts.loc[mask, 'Fact'] = prev_month_fact_value[0]
+        
         if prev_predicts[DATE_COLUMN].isin([CHOSEN_MONTH + MonthEnd(0)]).any():
             prev_predicts = prev_predicts.loc[prev_predicts[DATE_COLUMN] != CHOSEN_MONTH + MonthEnd(0)]
         all_models = pd.concat([prev_predicts, all_models])
@@ -452,6 +470,10 @@ def run_base_plus_pipeline(
         },
         result_file_name
     )
+    
+    # Очистка папок с моделями после завершения обучения BASE+
+    logger.info("🧹 Начинаем очистку папок с моделями...")
+    cleanup_model_folders(logger=logger)
 
 
 def run_base_pipeline(
@@ -470,6 +492,10 @@ def run_base_pipeline(
         prev_predicts_file,
         status_manager=None
     ):
+    
+    # Очистка папок с моделями перед началом обучения BASE
+    logger.info("🧹 Очистка папок с моделями перед началом обучения BASE...")
+    cleanup_model_folders(logger=logger)
 
     result_dfs = []
     linreg_w_intercept_weights_dfs = []
@@ -649,6 +675,11 @@ def run_base_pipeline(
             predicts_to_merge
         )
         all_models["Статья"] = TARGET_COLUMN
+        
+        # Сохраняем факт за предыдущий месяц ПЕРЕД удалением строк
+        prev_month = CHOSEN_MONTH - MonthEnd(1)
+        prev_month_fact_value = all_models.loc[all_models[DATE_COLUMN] == prev_month, 'Fact'].values
+        
         all_models = all_models.dropna(subset=["predict_TS_ML"]).reset_index(drop=True)
 
         # ----------------------------------
@@ -659,6 +690,15 @@ def run_base_pipeline(
         prev_predicts = prev_predicts.loc[prev_predicts['Статья'] == TARGET_COLUMN]
         cols_to_use = [col for col in prev_predicts.columns if ('разница' not in col) and ('отклонение' not in col)]
         prev_predicts = prev_predicts.loc[:, cols_to_use]
+        
+        # Обновляем факт предыдущего месяца в prev_predicts ТОЛЬКО если там NaN
+        if len(prev_month_fact_value) > 0 and not pd.isna(prev_month_fact_value[0]):
+            mask = prev_predicts[DATE_COLUMN] == prev_month
+            if mask.any():
+                # Проверяем, что Fact в prev_predicts для этого месяца == NaN
+                if pd.isna(prev_predicts.loc[mask, 'Fact'].values[0]):
+                    prev_predicts.loc[mask, 'Fact'] = prev_month_fact_value[0]
+        
         if prev_predicts[DATE_COLUMN].isin([CHOSEN_MONTH + MonthEnd(0)]).any():
             prev_predicts = prev_predicts.loc[prev_predicts[DATE_COLUMN] != CHOSEN_MONTH + MonthEnd(0)]
         all_models = pd.concat([prev_predicts, all_models])
@@ -805,3 +845,7 @@ def run_base_pipeline(
         },
         result_file_name
     )
+    
+    # Очистка папок с моделями после завершения обучения BASE
+    logger.info("🧹 Начинаем очистку папок с моделями...")
+    cleanup_model_folders(logger=logger)

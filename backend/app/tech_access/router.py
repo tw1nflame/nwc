@@ -150,20 +150,29 @@ async def download_logs_archive(word: str = Form(...)):
 		raise HTTPException(status_code=500, detail="SECRET_WORD не задан в .env")
 	if word != SECRET_WORD:
 		raise HTTPException(status_code=403, detail="Секретное слово неверно")
+	
 	base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs'))
-	files = [
-		os.path.join(base_dir, 'db_operations.log'),
-		os.path.join(base_dir, 'celery_worker.log'),
-		os.path.join(base_dir, 'log.txt')
-	]
-	files_to_zip = [(f, os.path.basename(f)) for f in files if os.path.exists(f)]
+	
+	if not os.path.exists(base_dir):
+		raise HTTPException(status_code=404, detail="Папка логов не найдена")
+	
+	# Собираем все файлы логов (включая ротированные с суффиксами дат)
+	files_to_zip = []
+	for filename in os.listdir(base_dir):
+		file_path = os.path.join(base_dir, filename)
+		# Проверяем только файлы (не директории) с расширениями .log и .txt
+		if os.path.isfile(file_path) and (filename.endswith('.log') or filename.endswith('.txt')):
+			files_to_zip.append((file_path, filename))
+	
 	if not files_to_zip:
 		raise HTTPException(status_code=404, detail="Нет ни одного лог-файла для скачивания")
+	
 	with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_zip:
 		with zipfile.ZipFile(tmp_zip, 'w') as archive:
 			for abs_path, arc_name in files_to_zip:
 				archive.write(abs_path, arc_name)
 		tmp_zip_path = tmp_zip.name
+	
 	return FileResponse(tmp_zip_path, filename="logs.zip", media_type="application/zip")
 
 

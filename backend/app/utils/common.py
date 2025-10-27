@@ -1,14 +1,16 @@
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Sequence, Union, Any, List, Dict
 
 import streamlit as st
 import yaml
 import os
+import shutil
 from pathlib import Path
 
 import logging
+import logging.handlers
 import sys
 
 from functools import wraps
@@ -30,7 +32,12 @@ def catch_errors(func):
     return wrapper
 
 def setup_custom_logging(log_file="log.txt"):
-    """Настройка логирования в файл и в консоль."""
+    """
+    Настройка логирования в файл и в консоль с автоматической ротацией логов.
+    
+    Логи автоматически ротируются каждый день в полночь.
+    Старые логи хранятся 7 дней, затем автоматически удаляются.
+    """
     
     # Создаем папку logs если она не существует
     log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../logs'))
@@ -50,10 +57,22 @@ def setup_custom_logging(log_file="log.txt"):
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     
-    # Обработчик для записи в файл
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    # Обработчик для записи в файл с автоматической ротацией
+    # when='midnight' - ротация в полночь каждый день
+    # interval=1 - каждый день
+    # backupCount=7 - хранить логи за последние 7 дней
+    file_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=log_file_path,
+        when='midnight',
+        interval=1,
+        backupCount=7,
+        encoding='utf-8',
+        utc=False
+    )
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
+    # Суффикс для архивных файлов (например: log.txt.2025-01-15)
+    file_handler.suffix = "%Y-%m-%d"
     
     # Обработчик для вывода в консоль (опционально)
     console_handler = logging.StreamHandler(sys.stdout)
@@ -275,3 +294,73 @@ def load_and_save_config():
             st.error(f"Ошибка чтения YAML файла: {str(e)}")
         except Exception as e:
             st.error(f"Произошла ошибка: {str(e)}")
+
+
+def cleanup_model_folders(base_path: str = None, logger=None):
+    """
+    Очищает папки с моделями AutoGluon для освобождения дискового пространства.
+    
+    Удаляет содержимое папок:
+    - models/ALL/ - модели TimeSeriesPredictor
+    - AutogluonModels/ - модели TabularPredictor
+    
+    Args:
+        base_path: Базовый путь к папке app (по умолчанию текущая директория)
+        logger: Логгер для вывода информации
+    
+    Returns:
+        dict: Статистика удаления {folder: status}
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+    
+    if base_path is None:
+        # Определяем путь к папке app (на уровень выше utils)
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
+    folders_to_clean = [
+        os.path.join(base_path, 'models', 'ALL'),
+        os.path.join(base_path, 'AutogluonModels')
+    ]
+    
+    cleanup_stats = {}
+    total_freed_mb = 0
+    
+    for folder_path in folders_to_clean:
+        if not os.path.exists(folder_path):
+            logger.info(f"📁 Папка не существует, пропускаем: {folder_path}")
+            cleanup_stats[folder_path] = "not_exists"
+            continue
+        
+        try:
+            # Подсчитываем размер перед удалением
+            folder_size = 0
+            for dirpath, dirnames, filenames in os.walk(folder_path):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    try:
+                        folder_size += os.path.getsize(filepath)
+                    except (OSError, FileNotFoundError):
+                        pass
+            
+            folder_size_mb = folder_size / (1024 * 1024)
+            
+            # Удаляем папку
+            shutil.rmtree(folder_path)
+            
+            # Пересоздаем пустую папку (чтобы не было ошибок при следующем обучении)
+            os.makedirs(folder_path, exist_ok=True)
+            
+            total_freed_mb += folder_size_mb
+            logger.info(f"✅ Очищена папка {folder_path}: освобождено {folder_size_mb:.2f} МБ")
+            cleanup_stats[folder_path] = f"cleaned_{folder_size_mb:.2f}_MB"
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка при очистке {folder_path}: {e}")
+            cleanup_stats[folder_path] = f"error: {str(e)}"
+    
+    logger.info(f"🧹 Очистка моделей завершена. Всего освобождено: {total_freed_mb:.2f} МБ")
+    
+    return cleanup_stats
+
+
