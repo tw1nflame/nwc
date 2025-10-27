@@ -128,6 +128,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             'message': 'Прогноз готов. Данные сохранены в БД и готовы к выгрузке!',
             'pipeline': pipeline,
             'date': date,
+            'articles': ITEMS_TO_PREDICT,  # Список статей, для которых запущено обучение
             'completed_at': datetime.now().isoformat()
         })
         
@@ -145,6 +146,7 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             'status': 'error',
             'message': f'Ошибка при обучении: {str(e)}',
             'error': str(e),
+            'articles': ITEMS_TO_PREDICT,  # Список статей, для которых была попытка обучения
             'completed_at': datetime.now().isoformat()
         })
         
