@@ -296,12 +296,17 @@ function StatusIndicator({ trainStatus, onClearStatus, accessToken }: { trainSta
             {config.subtext && (
               <p className="text-xs mt-1 opacity-75">{config.subtext}</p>
             )}
-            {/* Показываем детали завершенного обучения */}
-            {trainStatus?.status === "done" && (trainStatus?.pipeline || trainStatus?.date) && (
+            {/* Показываем детали завершенного обучения для done, error и revoked */}
+            {(trainStatus?.status === "done" || trainStatus?.status === "error" || trainStatus?.status === "revoked") && 
+             (trainStatus?.pipeline || trainStatus?.date || trainStatus?.articles) && (
               <div className="text-xs mt-2 space-y-0.5 opacity-90">
                 {trainStatus?.pipeline && <p>Алгоритм: {trainStatus.pipeline}</p>}
                 {trainStatus?.date && <p>Дата прогноза: {new Date(trainStatus.date).toLocaleDateString()}</p>}
                 {trainStatus?.completed_at && <p>Завершено: {new Date(trainStatus.completed_at).toLocaleString()}</p>}
+                {trainStatus?.articles && trainStatus.articles.length > 0 && (
+                  <p>Статьи ({trainStatus.articles.length}): {trainStatus.articles.join(", ")}</p>
+                )}
+                {trainStatus?.error && <p className="text-red-700 font-medium mt-1">Ошибка: {trainStatus.error}</p>}
               </div>
             )}
           </div>
@@ -461,10 +466,24 @@ function PredictForm({
 
             {/* Articles Selection */}
             <div className="space-y-4">
-              <Label className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-600" />
-                Статьи для прогноза
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  Статьи для прогноза
+                </Label>
+                {selectedItems.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedItems([])}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Очистить всё
+                  </Button>
+                )}
+              </div>
 
               <div className="flex flex-wrap gap-2 min-h-[40px] p-3 border border-gray-200 rounded-lg bg-gray-50">
                 <AnimatePresence>
