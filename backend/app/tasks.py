@@ -5,8 +5,12 @@ from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
 from utils.common import generate_monthly_period, setup_custom_logging
 from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel, process_exchange_rate_file
 from utils.training_status import training_status_manager
+from taxes.data_preparation import prepare_tax_data
+from taxes.forecast import forecast_taxes
+from taxes.db import init_db, get_all_forecast_pairs, restore_excel_from_db, save_excel_to_db
 import os
 from datetime import datetime
+import shutil
 
 # Устанавливаем флаг для Celery worker чтобы избежать дублирования логов
 os.environ['CELERY_WORKER_PROCESS'] = '1'
@@ -167,3 +171,63 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
                 return {"status": "revoked", "error": "Task was revoked"}
         
         return {"status": "error", "error": str(e)}
+
+@celery_app.task(bind=True)
+def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, selected_groups: dict):
+    try:
+        # 1. Init DB
+        init_db()
+        
+        # 2. Prepare Data
+        self.update_state(state='PROGRESS', meta={'status': 'Preparing data...'})
+        # Ensure data directory exists as prepare_tax_data might need it or use it
+        os.makedirs('data', exist_ok=True)
+        prepare_tax_data(history_file_path)
+        
+        # 3. Restore previous forecasts from DB
+        self.update_state(state='PROGRESS', meta={'status': 'Restoring previous forecasts...'})
+        target_dir = os.path.join('results', 'Разница Активов и Пассивов')
+        os.makedirs(target_dir, exist_ok=True)
+        
+        forecast_pairs = get_all_forecast_pairs()
+        for factor, item_id in forecast_pairs:
+            file_data = restore_excel_from_db(factor, item_id)
+            if file_data:
+                # Reconstruct filename: {factor}_{item_id}_predict_BASE.xlsx
+                filename = f"{factor}_{item_id}_predict_BASE.xlsx"
+                with open(os.path.join(target_dir, filename), 'wb') as f:
+                    f.write(file_data)
+                    
+        # 4. Run Forecast
+        # forecast_date_str is expected to be YYYY-MM-DD
+        forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
+        
+        def progress_callback(msg):
+            self.update_state(state='PROGRESS', meta={'status': f'Forecasting: {msg}'})
+            
+        forecast_taxes(forecast_date, selected_groups, progress_callback=progress_callback)
+        
+        # 5. Save updated forecasts to DB
+        self.update_state(state='PROGRESS', meta={'status': 'Saving results to DB...'})
+        for filename in os.listdir(target_dir):
+            if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                file_path = os.path.join(target_dir, filename)
+                with open(file_path, 'rb') as f:
+                    save_excel_to_db(filename, f.read())
+                    
+        # 6. Zip results
+        self.update_state(state='PROGRESS', meta={'status': 'Zipping results...'})
+        # Create zip in a known location
+        zip_name = f"forecast_results_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        zip_path = shutil.make_archive(zip_name, 'zip', 'results')
+        
+        # Move zip to a static folder if needed, or just return the path
+        # For now, return the absolute path
+        abs_zip_path = os.path.abspath(zip_path)
+        
+        return {'status': 'Completed', 'zip_path': abs_zip_path}
+        
+    except Exception as e:
+        logger.error(f"Task failed: {e}")
+        self.update_state(state='FAILURE', meta={'error': str(e)})
+        raise e

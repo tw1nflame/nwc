@@ -19,6 +19,7 @@ from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE, proc
 from utils.training_status import training_status_manager
 from utils.auth import require_authentication
 from tech_access.router import router as tech_router
+from taxes.router import router as taxes_router
 
 app = FastAPI()
 
@@ -53,6 +54,7 @@ os.makedirs(TRAINING_FILES_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 app.include_router(tech_router)
+app.include_router(taxes_router)
 
 @app.post("/train/")
 @require_authentication

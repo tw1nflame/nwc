@@ -334,6 +334,7 @@ function StatusIndicator({ status, onClearStatus }: { status: any; onClearStatus
 }
 
 export function TaxForecastPage() {
+  const { session } = useAuth()
   const { config, loading: configLoading } = useConfig()
   const [historyFile, setHistoryFile] = useState<File[]>([])
   const [forecastDate, setForecastDate] = useState<string>(new Date().toISOString().split('T')[0])
@@ -378,14 +379,75 @@ export function TaxForecastPage() {
     setSelectedPairs(selectedPairs.filter((i) => i !== item))
   }
 
-  const handleStartForecast = () => {
-      setStatus({ state: "running", currentTask: "Подготовка данных..." })
-      // Mock process
-      setTimeout(() => {
-          setStatus({ state: "running", currentTask: "Расчет налогов..." })
-          setTimeout(() => {
-              setStatus({ state: "done", message: "Прогноз успешно завершен!" })
-          }, 2000)
+  const handleStartForecast = async () => {
+      if (historyFile.length === 0) {
+          setStatus({ state: "error", message: "Пожалуйста, загрузите файл с историческими данными." })
+          return
+      }
+      
+      setStatus({ state: "running", currentTask: "Запуск прогноза..." })
+      
+      try {
+          const formData = new FormData()
+          formData.append("history_file", historyFile[0])
+          formData.append("forecast_date", forecastDate)
+          formData.append("selected_groups", JSON.stringify(selectedPairs))
+          
+          const token = session?.access_token
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/forecast`, {
+              method: "POST",
+              headers: {
+                  "Authorization": `Bearer ${token}`
+              },
+              body: formData
+          })
+          
+          if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(errorData.detail || "Failed to start forecast")
+          }
+          
+          const data = await response.json()
+          const taskId = data.task_id
+          
+          pollStatus(taskId)
+          
+      } catch (error: any) {
+          console.error(error)
+          setStatus({ state: "error", message: error.message || "Ошибка при запуске прогноза" })
+      }
+  }
+
+  const pollStatus = async (taskId: string) => {
+      const token = session?.access_token
+      const interval = setInterval(async () => {
+          try {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/status/${taskId}`, {
+                  headers: {
+                      "Authorization": `Bearer ${token}`
+                  }
+              })
+              
+              if (!response.ok) return
+              
+              const data = await response.json()
+              
+              if (data.status === "SUCCESS") {
+                  clearInterval(interval)
+                  setStatus({ state: "done", message: "Прогноз успешно завершен!" })
+                  // Trigger download
+                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/download/${taskId}`
+              } else if (data.status === "FAILURE") {
+                  clearInterval(interval)
+                  setStatus({ state: "error", message: `Ошибка: ${data.error}` })
+              } else if (data.status === "PROGRESS") {
+                  if (data.meta && data.meta.status) {
+                      setStatus({ state: "running", currentTask: data.meta.status })
+                  }
+              }
+          } catch (e) {
+              console.error(e)
+          }
       }, 2000)
   }
 

@@ -33,3 +33,14 @@ export async function stopAndClearTraining(word) {
   const res = await fetch(url, { method: 'POST', body: form });
   return await res.json();
 }
+
+export async function uploadTaxForecasts(word, files) {
+  const form = new FormData();
+  form.append('word', word);
+  for (let i = 0; i < files.length; i++) {
+    form.append('files', files[i]);
+  }
+  const url = backendUrl.replace(/\/$/, '') + '/upload-tax-forecasts';
+  const res = await fetch(url, { method: 'POST', body: form });
+  return await res.json();
+}

@@ -8,10 +8,11 @@ import pandas as pd
 import psycopg2
 import io
 import re
-from typing import Dict
+from typing import Dict, List
 from utils.column_mapping import COLUMN_MAPPING
 from celery.result import AsyncResult
 from utils.training_status import training_status_manager
+from taxes.db import save_excel_to_db, init_db
 
 router = APIRouter()
 load_dotenv()
@@ -143,7 +144,7 @@ async def upload_excel(
 	return {"ok": True, "message": "Excel успешно загружен в БД"}
 
 
-# --- 4. Скачать все логи архивом (требует секретное слово) ---
+# --- 3. Скачать все логи архивом (требует секретное слово) ---
 @router.post('/download-logs-archive')
 async def download_logs_archive(word: str = Form(...)):
 	if not SECRET_WORD:
@@ -176,7 +177,7 @@ async def download_logs_archive(word: str = Form(...)):
 	return FileResponse(tmp_zip_path, filename="logs.zip", media_type="application/zip")
 
 
-# --- 5. Остановить текущую задачу и очистить Redis ---
+# --- 4. Остановить текущую задачу и очистить Redis ---
 @router.post('/stop-and-clear')
 async def stop_and_clear_training(word: str = Form(...)):
 	"""
@@ -210,3 +211,35 @@ async def stop_and_clear_training(word: str = Form(...)):
 		"message": "Задача остановлена и Redis очищен",
 		"stopped_task_id": stopped_task
 	}
+
+
+# --- 5. Загрузка файлов предыдущих прогнозов ---
+@router.post('/upload-tax-forecasts')
+async def upload_tax_forecasts(
+    files: List[UploadFile] = File(...),
+    word: str = Form(...)
+):
+    if not SECRET_WORD:
+        raise HTTPException(status_code=500, detail="SECRET_WORD не задан в .env")
+    if word != SECRET_WORD:
+        raise HTTPException(status_code=403, detail="Секретное слово неверно")
+    
+    # Ensure table exists
+    init_db()
+    
+    uploaded_count = 0
+    errors = []
+    
+    for file in files:
+        try:
+            content = await file.read()
+            save_excel_to_db(file.filename, content)
+            uploaded_count += 1
+        except Exception as e:
+            errors.append(f"{file.filename}: {str(e)}")
+            
+    return {
+        "ok": True,
+        "uploaded_count": uploaded_count,
+        "errors": errors
+    }

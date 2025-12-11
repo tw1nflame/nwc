@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { checkSecretWord, downloadLogsArchive, uploadOldForecast, stopAndClearTraining } from "./utils/techAccessApi";
+import { checkSecretWord, downloadLogsArchive, uploadOldForecast, stopAndClearTraining, uploadTaxForecasts } from "./utils/techAccessApi";
 
 export const TechAccessPanel: React.FC = () => {
   const [secret, setSecret] = useState("");
@@ -14,6 +14,11 @@ export const TechAccessPanel: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [stopMsg, setStopMsg] = useState<string | null>(null);
+  
+  // New state for tax forecasts
+  const [taxFiles, setTaxFiles] = useState<FileList | null>(null);
+  const [taxUploadLoading, setTaxUploadLoading] = useState(false);
+  const [taxUploadMsg, setTaxUploadMsg] = useState<string | null>(null);
 
   const checkSecret = async () => {
     setLoading(true);
@@ -86,6 +91,28 @@ export const TechAccessPanel: React.FC = () => {
       setError("Ошибка остановки задачи");
     } finally {
       setStopLoading(false);
+    }
+  };
+
+  const uploadTaxFiles = async () => {
+    if (!taxFiles || taxFiles.length === 0) return;
+    setTaxUploadLoading(true);
+    setTaxUploadMsg(null);
+    setError(null);
+    try {
+      const data = await uploadTaxForecasts(secret, taxFiles);
+      if (data.ok) {
+        setTaxUploadMsg(`Загружено файлов: ${data.uploaded_count}`);
+        if (data.errors && data.errors.length > 0) {
+            setError(`Ошибки: ${data.errors.join(", ")}`);
+        }
+      } else {
+        setError(data.detail || "Ошибка загрузки");
+      }
+    } catch (e) {
+      setError("Ошибка загрузки файлов");
+    } finally {
+      setTaxUploadLoading(false);
     }
   };
 
@@ -164,6 +191,34 @@ export const TechAccessPanel: React.FC = () => {
               </button>
               {uploadMsg && <div className="text-green-700 text-sm mt-1">{uploadMsg}</div>}
             </div>
+          </div>
+
+          <div className="font-semibold mb-2 mt-4">Загрузить файлы налогов (13 шт)</div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                multiple
+                onChange={e => setTaxFiles(e.target.files)}
+                className="mb-0 w-32 shrink-0"
+                disabled={taxUploadLoading}
+                style={{ maxWidth: 130 }}
+              />
+              {taxFiles && (
+                <span className="text-sm text-gray-600 truncate max-w-[150px]">
+                  {taxFiles.length} файлов
+                </span>
+              )}
+            </div>
+            <button
+              className="bg-blue-600 text-white rounded px-3 py-1 disabled:opacity-60"
+              onClick={uploadTaxFiles}
+              disabled={taxUploadLoading || !taxFiles}
+            >
+              {taxUploadLoading ? "Загрузка..." : "Загрузить в БД"}
+            </button>
+            {taxUploadMsg && <div className="text-green-700 text-sm mt-1">{taxUploadMsg}</div>}
           </div>
         </div>
       )}
