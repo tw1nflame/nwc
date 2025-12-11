@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useRouter } from "next/navigation"
 import { TechAccessPanel } from "./TechAccessPanel"
 import { motion, AnimatePresence } from "framer-motion"
-import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown } from "lucide-react"
+import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown, Calculator } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/sidebar"
 
 interface AppSidebarProps {
-  currentPage: "training" | "analysis" | "export" | "analytics"
-  onPageChange: (page: "training" | "analysis" | "export" | "analytics") => void
+  currentPage: "training" | "analysis" | "export" | "analytics" | "tax-forecast"
+  onPageChange: (page: "training" | "analysis" | "export" | "analytics" | "tax-forecast") => void
 }
 
 export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
@@ -70,7 +70,7 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-700 font-semibold">Основные разделы</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-gray-700 font-semibold">Прогноз ЧОК</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -111,6 +111,24 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
                 >
                   <FileDown className="w-4 h-4" />
                   <span>Выгрузка и корректировки</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-gray-700 font-semibold">Налоги</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onPageChange("tax-forecast")}
+                  isActive={currentPage === "tax-forecast"}
+                  className="w-full justify-start"
+                >
+                  <Calculator className="w-4 h-4" />
+                  <span>Прогноз налогов</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
