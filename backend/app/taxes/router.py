@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from tasks import run_tax_forecast_task
 from celery.result import AsyncResult
+from celery_app import celery_app
 import os
 import json
 import shutil
@@ -80,3 +81,9 @@ async def download_result(request: Request, task_id: str):
         return FileResponse(result['zip_path'], media_type='application/zip', filename="forecast_results.zip")
     
     raise HTTPException(status_code=404, detail="Result file not found")
+
+@router.post("/stop/{task_id}")
+@require_authentication
+async def stop_forecast(request: Request, task_id: str):
+    celery_app.control.revoke(task_id, terminate=True)
+    return {"status": "Task revoked"}

@@ -7,18 +7,13 @@ import json
 def generate_historical_data(filename="test_tax_history.xlsx"):
     print(f"Generating {filename}...")
     
-    # Create dates (columns)
-    start_date = datetime(2020, 1, 1)
-    dates = []
-    for i in range(48): # 4 years
-        d = start_date + timedelta(days=32*i)
-        d = d.replace(day=1)
-        # Format: "Январь 2020"
-        month_names = {
-            1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель', 5: 'май', 6: 'июнь',
-            7: 'июль', 8: 'август', 9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
-        }
-        dates.append(f"{month_names[d.month]} {d.year}")
+    # Create dates (columns) - Month Year format (e.g. "январь 2020")
+    dates_dt = pd.date_range(start='2020-01-01', periods=48, freq='M')
+    month_names = {
+        1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель', 5: 'май', 6: 'июнь',
+        7: 'июль', 8: 'август', 9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
+    }
+    dates = [f"{month_names[d.month]} {d.year}" for d in dates_dt]
     
     # Create rows
     # We need rows that match the filters in data_preparation.py
@@ -65,10 +60,10 @@ def generate_historical_data(filename="test_tax_history.xlsx"):
     # Create a writer
     with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
         # Write empty rows
-        # We need the header to be at Excel Row 13 (index 12)
-        # So we write the dataframe starting at row 12
-        # startrow is 0-indexed. startrow=11 means Row 12.
-        df.to_excel(writer, sheet_name='Налоги_RUB_комп_value', startrow=11, index=False)
+        # We need the header to be at Excel Row 12 (index 11)
+        # So we write the dataframe starting at row 11
+        # startrow=12 means Excel Row 13.
+        df.to_excel(writer, sheet_name='Налоги_RUB_комп_value', startrow=12, index=False)
 
 
 def generate_forecast_files(output_dir="generated_forecasts"):
@@ -97,7 +92,9 @@ def generate_forecast_files(output_dir="generated_forecasts"):
     ]
     
     # Dates for forecast
-    dates = pd.date_range(start='2020-01-01', periods=48, freq='M')
+    dates_dt = pd.date_range(start='2020-01-01', periods=48, freq='M')
+    # Use datetime.date objects to ensure no time component in Excel
+    dates = [d.date() for d in dates_dt]
     
     for factor, item_id in clusters:
         # Clean filename

@@ -340,6 +340,7 @@ export function TaxForecastPage() {
   const [forecastDate, setForecastDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [selectedPairs, setSelectedPairs] = useState<string[]>([])
   const [status, setStatus] = useState<any>({ state: "idle" })
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
 
   // Flatten options for multiselect
   const selectionOptions: string[] = []
@@ -409,6 +410,7 @@ export function TaxForecastPage() {
           
           const data = await response.json()
           const taskId = data.task_id
+          setCurrentTaskId(taskId)
           
           pollStatus(taskId)
           
@@ -435,11 +437,13 @@ export function TaxForecastPage() {
               if (data.status === "SUCCESS") {
                   clearInterval(interval)
                   setStatus({ state: "done", message: "Прогноз успешно завершен!" })
+                  setCurrentTaskId(null)
                   // Trigger download
                   window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/download/${taskId}`
               } else if (data.status === "FAILURE") {
                   clearInterval(interval)
                   setStatus({ state: "error", message: `Ошибка: ${data.error}` })
+                  setCurrentTaskId(null)
               } else if (data.status === "PROGRESS") {
                   if (data.meta && data.meta.status) {
                       setStatus({ state: "running", currentTask: data.meta.status })
@@ -449,6 +453,24 @@ export function TaxForecastPage() {
               console.error(e)
           }
       }, 2000)
+  }
+
+  const handleStopForecast = async () => {
+      if (!currentTaskId) return
+
+      try {
+          const token = session?.access_token
+          await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/stop/${currentTaskId}`, {
+              method: "POST",
+              headers: {
+                  "Authorization": `Bearer ${token}`
+              }
+          })
+          setStatus({ state: "idle", message: "Прогноз остановлен" })
+          setCurrentTaskId(null)
+      } catch (error) {
+          console.error("Failed to stop forecast:", error)
+      }
   }
 
   const handleClearStatus = () => {
@@ -610,7 +632,7 @@ export function TaxForecastPage() {
                                 >
                                     <Button
                                         type="button"
-                                        onClick={() => setStatus({ state: "idle" })} // Mock stop
+                                        onClick={handleStopForecast}
                                         variant="destructive"
                                         className="w-full bg-red-600 hover:bg-red-700 py-[26px] flex items-center justify-center text-lg font-semibold"
                                     >
