@@ -341,6 +341,7 @@ export function TaxForecastPage() {
   const [selectedPairs, setSelectedPairs] = useState<string[]>([])
   const [status, setStatus] = useState<any>({ state: "idle" })
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Flatten options for multiselect
   const selectionOptions: string[] = []
@@ -361,6 +362,15 @@ export function TaxForecastPage() {
           setSelectedPairs(selectionOptions)
       }
   }, [config])
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+      return () => {
+          if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+          }
+      }
+  }, [])
 
   const toggleSelection = (option: string) => {
       if (selectedPairs.includes(option)) {
@@ -422,7 +432,13 @@ export function TaxForecastPage() {
 
   const pollStatus = async (taskId: string) => {
       const token = session?.access_token
-      const interval = setInterval(async () => {
+      
+      // Clear any existing interval
+      if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+      }
+
+      pollingIntervalRef.current = setInterval(async () => {
           try {
               const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/status/${taskId}`, {
                   headers: {
@@ -435,13 +451,13 @@ export function TaxForecastPage() {
               const data = await response.json()
               
               if (data.status === "SUCCESS") {
-                  clearInterval(interval)
+                  if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
                   setStatus({ state: "done", message: "Прогноз успешно завершен!" })
                   setCurrentTaskId(null)
                   // Trigger download
                   window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/download/${taskId}`
               } else if (data.status === "FAILURE") {
-                  clearInterval(interval)
+                  if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
                   setStatus({ state: "error", message: `Ошибка: ${data.error}` })
                   setCurrentTaskId(null)
               } else if (data.status === "PROGRESS") {
@@ -457,6 +473,12 @@ export function TaxForecastPage() {
 
   const handleStopForecast = async () => {
       if (!currentTaskId) return
+
+      // Clear polling interval immediately
+      if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+      }
 
       try {
           const token = session?.access_token

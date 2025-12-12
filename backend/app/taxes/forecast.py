@@ -1,12 +1,18 @@
 import os
 import pandas as pd
-
+from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
+import logging
+from pandas.tseries.offsets import MonthEnd
 from datetime import datetime
 from functools import reduce
-from pandas.tseries.offsets import MonthEnd
+from utils.pipelines import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
+from utils.common import generate_monthly_period
 
-from .utils.tax_pipeline import *
-from utils.excel_formatter import save_dataframes_to_excel
+# Get absolute path to pretrained_models directory
+# This file is in backend/app/taxes/
+# We want backend/app/pretrained_models/
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PRETRAINED_MODELS_DIR = os.path.join(BASE_DIR, 'pretrained_models')
 
 group_companies = {
     'НДС': [
@@ -79,9 +85,9 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
                 'DirectTabularModel': {},
                 'RecursiveTabularModel': {},
                 'Chronos': [
-                    {'model_path': 'pretrained_models/chronos-bolt-base', 'ag_args': {'name_suffix': 'ZeroShot'}},
-                    {'model_path': 'pretrained_models/chronos-bolt-small', 'ag_args': {'name_suffix': 'ZeroShot'}},
-                    {'model_path': 'pretrained_models/chronos-bolt-small', 'fine_tune': True, 'ag_args': {'name_suffix': 'FineTuned'}}
+                    {'model_path': os.path.join(PRETRAINED_MODELS_DIR, 'chronos-bolt-base'), 'ag_args': {'name_suffix': 'ZeroShot'}},
+                    {'model_path': os.path.join(PRETRAINED_MODELS_DIR, 'chronos-bolt-small'), 'ag_args': {'name_suffix': 'ZeroShot'}},
+                    {'model_path': os.path.join(PRETRAINED_MODELS_DIR, 'chronos-bolt-small'), 'fine_tune': True, 'ag_args': {'name_suffix': 'FineTuned'}}
                 ]
             }
 
