@@ -5,8 +5,8 @@ import logging
 from pandas.tseries.offsets import MonthEnd
 from datetime import datetime
 from functools import reduce
-from utils.pipelines import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
-from utils.common import generate_monthly_period
+from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
+from .utils.tax_pipeline import generate_monthly_period
 
 # Get absolute path to pretrained_models directory
 # This file is in backend/app/taxes/
