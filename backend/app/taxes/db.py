@@ -154,20 +154,35 @@ def save_excel_to_db(filename: str, file_content: bytes):
                                 pred_records.append((factor, item_id, date, col, val, datetime.now()))
                 
                 if fact_records:
+                    # Remove duplicates from fact_records based on primary key (factor, item_id, date)
+                    # Keep the last occurrence (most recent update)
+                    unique_facts = {}
+                    for rec in fact_records:
+                        key = (rec[0], rec[1], rec[2]) # factor, item_id, date
+                        unique_facts[key] = rec
+                    fact_records_unique = list(unique_facts.values())
+
                     execute_values(cur, """
                         INSERT INTO tax_forecast_facts (factor, item_id, date, fact_value, updated_at)
                         VALUES %s
                         ON CONFLICT (factor, item_id, date) 
                         DO UPDATE SET fact_value = EXCLUDED.fact_value, updated_at = EXCLUDED.updated_at
-                    """, fact_records)
+                    """, fact_records_unique)
                 
                 if pred_records:
+                    # Remove duplicates from pred_records based on primary key (factor, item_id, date, metric_name)
+                    unique_preds = {}
+                    for rec in pred_records:
+                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, metric_name
+                        unique_preds[key] = rec
+                    pred_records_unique = list(unique_preds.values())
+
                     execute_values(cur, """
                         INSERT INTO tax_forecast_predictions (factor, item_id, date, metric_name, value, updated_at)
                         VALUES %s
                         ON CONFLICT (factor, item_id, date, metric_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-                    """, pred_records)
+                    """, pred_records_unique)
 
             # 2. Process 'coeffs' sheet
             if 'coeffs' in xls.sheet_names:
@@ -182,12 +197,19 @@ def save_excel_to_db(filename: str, file_content: bytes):
                                 records.append((factor, item_id, date, col, val, datetime.now()))
                 
                 if records:
+                    # Remove duplicates
+                    unique_coeffs = {}
+                    for rec in records:
+                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, feature_name
+                        unique_coeffs[key] = rec
+                    records_unique = list(unique_coeffs.values())
+
                     execute_values(cur, """
                         INSERT INTO tax_forecast_coeffs (factor, item_id, date, feature_name, value, updated_at)
                         VALUES %s
                         ON CONFLICT (factor, item_id, date, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-                    """, records)
+                    """, records_unique)
 
             # 3. Process 'coeffs_no_intercept' sheet
             if 'coeffs_no_intercept' in xls.sheet_names:
@@ -202,12 +224,19 @@ def save_excel_to_db(filename: str, file_content: bytes):
                                 records.append((factor, item_id, date, col, val, datetime.now()))
                 
                 if records:
+                    # Remove duplicates
+                    unique_coeffs_ni = {}
+                    for rec in records:
+                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, feature_name
+                        unique_coeffs_ni[key] = rec
+                    records_unique = list(unique_coeffs_ni.values())
+
                     execute_values(cur, """
                         INSERT INTO tax_forecast_coeffs_no_intercept (factor, item_id, date, feature_name, value, updated_at)
                         VALUES %s
                         ON CONFLICT (factor, item_id, date, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-                    """, records)
+                    """, records_unique)
 
             # 4. Process 'TimeSeries_ensemble_models_info' sheet
             if 'TimeSeries_ensemble_models_info' in xls.sheet_names:
@@ -229,12 +258,19 @@ def save_excel_to_db(filename: str, file_content: bytes):
                             records.append((factor, item_id, date, target, model_name, weight, datetime.now()))
                 
                 if records:
+                    # Remove duplicates
+                    unique_weights = {}
+                    for rec in records:
+                        key = (rec[0], rec[1], rec[2], rec[3], rec[4]) # factor, item_id, date, target, model_name
+                        unique_weights[key] = rec
+                    records_unique = list(unique_weights.values())
+
                     execute_values(cur, """
                         INSERT INTO tax_forecast_ensemble_weights (factor, item_id, date, target, model_name, weight, updated_at)
                         VALUES %s
                         ON CONFLICT (factor, item_id, date, target, model_name) 
                         DO UPDATE SET weight = EXCLUDED.weight, updated_at = EXCLUDED.updated_at
-                    """, records)
+                    """, records_unique)
                 
         conn.commit()
     except Exception as e:
