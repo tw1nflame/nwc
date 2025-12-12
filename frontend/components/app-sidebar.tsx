@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/sidebar"
 
 interface AppSidebarProps {
-  currentPage: "training" | "analysis" | "export" | "analytics" | "tax-forecast"
-  onPageChange: (page: "training" | "analysis" | "export" | "analytics" | "tax-forecast") => void
+  currentPage: "training" | "analysis" | "export" | "analytics" | "tax-forecast" | "tax-export"
+  onPageChange: (page: "training" | "analysis" | "export" | "analytics" | "tax-forecast" | "tax-export") => void
 }
 
 export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
@@ -129,6 +129,16 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
                 >
                   <Calculator className="w-4 h-4" />
                   <span>Прогноз налогов</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onPageChange("tax-export")}
+                  isActive={currentPage === "tax-export"}
+                  className="w-full justify-start"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Выгрузка</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

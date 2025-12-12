@@ -6,13 +6,14 @@ import { AnalysisPage } from "@/components/analysis-page"
 import { ExportPage } from "@/components/export-page"
 import { AnalyticsPage } from "@/components/analytics-page"
 import { TaxForecastPage } from "@/components/tax-forecast-page"
+import { TaxExportPage } from "@/components/tax-export-page"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { useState } from "react"
 import RequireAuth from "@/components/RequireAuth"
 import { AnalyticsProvider } from "../context/AnalyticsContext"
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<"training" | "analysis" | "export" | "analytics" | "tax-forecast">("training")
+  const [currentPage, setCurrentPage] = useState<"training" | "analysis" | "export" | "analytics" | "tax-forecast" | "tax-export">("training")
 
   return (
     <RequireAuth>
@@ -25,6 +26,7 @@ export default function App() {
             {currentPage === "analysis" && <AnalysisPage />}
             {currentPage === "export" && <ExportPage />}
             {currentPage === "tax-forecast" && <TaxForecastPage />}
+            {currentPage === "tax-export" && <TaxExportPage />}
           </SidebarInset>
         </SidebarProvider>
       </AnalyticsProvider>

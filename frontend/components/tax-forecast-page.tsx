@@ -15,7 +15,8 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  Loader2
+  Loader2,
+  Download
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -236,7 +237,7 @@ function FileInput({
   )
 }
 
-function StatusIndicator({ status, onClearStatus }: { status: any; onClearStatus?: () => void }) {
+function StatusIndicator({ status, onClearStatus, currentTaskId }: { status: any; onClearStatus?: () => void; currentTaskId?: string | null }) {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "running":
@@ -483,10 +484,9 @@ export function TaxForecastPage() {
               
               if (data.status === "SUCCESS") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-                  setStatus({ state: "done", message: "Прогноз успешно завершен!" })
-                  setCurrentTaskId(null)
-                  // Trigger download
-                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/download/${taskId}`
+                  setStatus({ state: "done", message: "Прогноз успешно завершен!", taskId: taskId })
+                  // Don't clear currentTaskId immediately so we can use it for download
+                  // setCurrentTaskId(null) 
               } else if (data.status === "FAILURE") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
                   setStatus({ state: "error", message: `Ошибка: ${data.error}` })
@@ -678,7 +678,7 @@ export function TaxForecastPage() {
                             <h3 className="text-lg font-semibold text-gray-800">Статус прогноза</h3>
                         </div>
 
-                        <StatusIndicator status={status} onClearStatus={handleClearStatus} />
+                        <StatusIndicator status={status} onClearStatus={handleClearStatus} currentTaskId={currentTaskId} />
                         
                         <AnimatePresence>
                             {status.state === "running" && (

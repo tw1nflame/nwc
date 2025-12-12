@@ -10,6 +10,8 @@ from datetime import datetime
 from utils.auth import require_authentication
 from utils.training_status import training_status_manager
 
+from taxes.db import get_all_forecast_pairs, restore_excel_from_db
+
 router = APIRouter(prefix="/taxes", tags=["taxes"])
 
 @router.post("/forecast")
@@ -98,3 +100,38 @@ async def stop_forecast(request: Request, task_id: str):
 async def get_active_task(request: Request):
     task_id = training_status_manager.get_current_tax_task()
     return {"task_id": task_id}
+
+@router.get("/export_excel")
+@require_authentication
+async def export_excel(request: Request):
+    temp_dir = None
+    try:
+        # Create temp dir
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        temp_dir = f"temp_tax_export_{timestamp}"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        forecast_pairs = get_all_forecast_pairs()
+        if not forecast_pairs:
+             raise HTTPException(status_code=404, detail="No forecast data found")
+
+        for factor, item_id in forecast_pairs:
+            file_data = restore_excel_from_db(factor, item_id)
+            if file_data:
+                filename = f"{factor}_{item_id}_predict.xlsx"
+                with open(os.path.join(temp_dir, filename), 'wb') as f:
+                    f.write(file_data)
+        
+        # Zip
+        zip_name = f"tax_forecast_{timestamp}"
+        zip_path = shutil.make_archive(zip_name, 'zip', temp_dir)
+        
+        # Clean up temp dir
+        shutil.rmtree(temp_dir)
+        
+        return FileResponse(zip_path, media_type='application/zip', filename=f"{zip_name}.zip")
+        
+    except Exception as e:
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=str(e))
