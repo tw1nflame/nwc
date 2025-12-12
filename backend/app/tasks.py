@@ -225,9 +225,14 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         # For now, return the absolute path
         abs_zip_path = os.path.abspath(zip_path)
         
+        # Очищаем статус активной задачи
+        training_status_manager.clear_tax_task()
+        
         return {'status': 'Completed', 'zip_path': abs_zip_path}
         
     except Exception as e:
         logger.error(f"Task failed: {e}")
         self.update_state(state='FAILURE', meta={'error': str(e)})
+        # Очищаем статус активной задачи при ошибке
+        training_status_manager.clear_tax_task()
         raise e

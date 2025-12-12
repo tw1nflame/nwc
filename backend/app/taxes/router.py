@@ -90,6 +90,7 @@ async def download_result(request: Request, task_id: str):
 @require_authentication
 async def stop_forecast(request: Request, task_id: str):
     celery_app.control.revoke(task_id, terminate=True)
+    training_status_manager.clear_tax_task()
     return {"status": "Task revoked"}
 
 @router.get("/active-task")

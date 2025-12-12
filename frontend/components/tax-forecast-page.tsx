@@ -372,6 +372,34 @@ export function TaxForecastPage() {
       }
   }, [])
 
+  // Restore active task on load
+  React.useEffect(() => {
+      const checkActiveTask = async () => {
+          if (!session?.access_token) return
+
+          try {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/active-task`, {
+                  headers: {
+                      "Authorization": `Bearer ${session.access_token}`
+                  }
+              })
+              
+              if (response.ok) {
+                  const data = await response.json()
+                  if (data.task_id) {
+                      setCurrentTaskId(data.task_id)
+                      setStatus({ state: "running", currentTask: "Восстановление сессии..." })
+                      pollStatus(data.task_id)
+                  }
+              }
+          } catch (error) {
+              console.error("Failed to check active task:", error)
+          }
+      }
+
+      checkActiveTask()
+  }, [session])
+
   const toggleSelection = (option: string) => {
       if (selectedPairs.includes(option)) {
           setSelectedPairs(selectedPairs.filter(item => item !== option))
@@ -459,6 +487,10 @@ export function TaxForecastPage() {
               } else if (data.status === "FAILURE") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
                   setStatus({ state: "error", message: `Ошибка: ${data.error}` })
+                  setCurrentTaskId(null)
+              } else if (data.status === "REVOKED") {
+                  if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+                  setStatus({ state: "idle", message: "Прогноз остановлен" })
                   setCurrentTaskId(null)
               } else if (data.status === "PROGRESS") {
                   if (data.meta && data.meta.status) {
