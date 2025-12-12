@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import reduce
 from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
 from .utils.tax_pipeline import generate_monthly_period
+from .utils.excel_formatter import save_dataframes_to_excel
 
 # Get absolute path to pretrained_models directory
 # This file is in backend/app/taxes/

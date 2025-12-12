@@ -178,6 +178,10 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         # 1. Init DB
         init_db()
         
+        # Clean up results directory to avoid stale files
+        if os.path.exists('results'):
+            shutil.rmtree('results')
+            
         # 2. Prepare Data
         self.update_state(state='PROGRESS', meta={'status': 'Preparing data...'})
         # Ensure data directory exists as prepare_tax_data might need it or use it

@@ -374,6 +374,9 @@ export function TaxForecastPage() {
 
   // Restore active task on load
   React.useEffect(() => {
+      // If we already have a task ID, don't check again to avoid overwriting status
+      if (currentTaskId) return
+
       const checkActiveTask = async () => {
           if (!session?.access_token) return
 
@@ -398,7 +401,7 @@ export function TaxForecastPage() {
       }
 
       checkActiveTask()
-  }, [session])
+  }, [session, currentTaskId])
 
   const toggleSelection = (option: string) => {
       if (selectedPairs.includes(option)) {
