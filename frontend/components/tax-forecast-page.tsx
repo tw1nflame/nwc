@@ -301,14 +301,16 @@ function StatusIndicator({ status, onClearStatus, currentTaskId }: { status: any
           </div>
         </div>
         {status?.state === "done" && (
-          <Button
-            size="sm"
-            onClick={onClearStatus}
-            variant="ghost"
-            className="ml-auto text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 px-3"
-          >
-            Скрыть
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={onClearStatus}
+              variant="ghost"
+              className="ml-auto text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 px-3"
+            >
+              Скрыть
+            </Button>
+          </div>
         )}
       </div>
 
@@ -382,6 +384,7 @@ export function TaxForecastPage() {
           if (!session?.access_token) return
 
           try {
+              // 1. Check for active task
               const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/active-task`, {
                   headers: {
                       "Authorization": `Bearer ${session.access_token}`
@@ -394,8 +397,28 @@ export function TaxForecastPage() {
                       setCurrentTaskId(data.task_id)
                       setStatus({ state: "running", currentTask: "Восстановление сессии..." })
                       pollStatus(data.task_id)
+                      return // Exit if active task found
                   }
               }
+
+              // 2. If no active task, check for last completed status
+              const lastStatusResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/last-completed`, {
+                  headers: {
+                      "Authorization": `Bearer ${session.access_token}`
+                  }
+              })
+
+              if (lastStatusResponse.ok) {
+                  const lastStatus = await lastStatusResponse.json()
+                  if (lastStatus.status === 'done') {
+                      setStatus({ 
+                          state: "done", 
+                          message: "Прогноз успешно завершен!",
+                          completedAt: lastStatus.completed_at
+                      })
+                  }
+              }
+
           } catch (error) {
               console.error("Failed to check active task:", error)
           }
@@ -530,8 +553,22 @@ export function TaxForecastPage() {
       }
   }
 
-  const handleClearStatus = () => {
-      setStatus({ state: "idle" })
+  const handleClearStatus = async () => {
+      try {
+          const token = session?.access_token
+          await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/clear-status`, {
+              method: "POST",
+              headers: {
+                  "Authorization": `Bearer ${token}`
+              }
+          })
+          setStatus({ state: "idle" })
+          setCurrentTaskId(null)
+      } catch (error) {
+          console.error("Failed to clear status:", error)
+          setStatus({ state: "idle" })
+          setCurrentTaskId(null)
+      }
   }
 
   const availableItems = selectionOptions.filter((item) => !selectedPairs.includes(item))

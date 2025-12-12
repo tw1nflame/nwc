@@ -28,7 +28,8 @@ class TrainingStatusManager:
             # Глобальный статус завершенного обучения (видят ВСЕ пользователи)
             'last_completed_training': 'last_completed_training',
             # Статус прогноза налогов
-            'tax_current_task_id': 'tax_forecast:current_task_id'
+            'tax_current_task_id': 'tax_forecast:current_task_id',
+            'last_completed_tax_forecast': 'last_completed_tax_forecast'
         }
     @staticmethod
     def _build_redis_url():
@@ -260,6 +261,43 @@ class TrainingStatusManager:
             self.redis_client.delete(self.KEYS['tax_current_task_id'])
         except Exception as e:
             print(f"Error clearing tax task: {e}")
+
+    def save_completed_tax_forecast(self, data: Dict[str, Any]) -> None:
+        """
+        Сохраняет информацию о завершенном прогнозе налогов.
+        
+        Args:
+            data: Словарь с данными о завершенном прогнозе
+        """
+        try:
+            import json
+            self.redis_client.set(self.KEYS['last_completed_tax_forecast'], json.dumps(data))
+        except Exception as e:
+            print(f"Error saving completed tax forecast: {e}")
+
+    def get_last_completed_tax_forecast(self) -> Optional[Dict[str, Any]]:
+        """
+        Получает информацию о последнем завершенном прогнозе налогов.
+        
+        Returns:
+            Словарь с данными о завершенном прогнозе или None
+        """
+        try:
+            import json
+            data = self.redis_client.get(self.KEYS['last_completed_tax_forecast'])
+            return json.loads(data.decode()) if data else None
+        except Exception as e:
+            print(f"Error getting last completed tax forecast: {e}")
+            return None
+
+    def clear_last_completed_tax_forecast(self) -> None:
+        """
+        Очищает информацию о последнем завершенном прогнозе налогов.
+        """
+        try:
+            self.redis_client.delete(self.KEYS['last_completed_tax_forecast'])
+        except Exception as e:
+            print(f"Error clearing last completed tax forecast: {e}")
 
 
 # Singleton instance для использования в приложении

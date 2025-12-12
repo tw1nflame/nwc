@@ -232,6 +232,13 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         # Очищаем статус активной задачи
         training_status_manager.clear_tax_task()
         
+        # Сохраняем статус завершенного прогноза
+        training_status_manager.save_completed_tax_forecast({
+            'status': 'done',
+            'completed_at': datetime.now().isoformat(),
+            'zip_path': abs_zip_path
+        })
+        
         return {'status': 'Completed', 'zip_path': abs_zip_path}
         
     except Exception as e:
