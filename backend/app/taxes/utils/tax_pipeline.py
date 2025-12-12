@@ -104,10 +104,10 @@ def predict_individual(
                 # Заполняем пропуски в timeseries по месяцам нулевыми значениями
                 full_index = pd.MultiIndex.from_product([
                     df_ts['item_id'].unique(),
-                    pd.date_range(df_ts['timestamp'].min(), MONTH_TO_PREDICT_first_day - relativedelta(months=1) + MonthEnd(0), freq='M')
+                    pd.date_range(df_ts['timestamp'].min(), MONTH_TO_PREDICT_first_day - relativedelta(months=1) + MonthEnd(0), freq='ME')
                 ], names=['item_id', 'timestamp'])
                 
-                df_ts = df_ts.set_index(['item_id', 'timestamp']).reindex(full_index, fill_value=0).convert_frequency(freq="M")
+                df_ts = df_ts.set_index(['item_id', 'timestamp']).reindex(full_index, fill_value=0).convert_frequency(freq="ME")
                 df_ts = df_ts.fillna(0)
                 
                 TARGET_PREDICTS = []

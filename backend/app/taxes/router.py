@@ -8,6 +8,7 @@ import json
 import shutil
 from datetime import datetime
 from utils.auth import require_authentication
+from utils.training_status import training_status_manager
 
 router = APIRouter(prefix="/taxes", tags=["taxes"])
 
@@ -51,6 +52,9 @@ async def start_forecast(
     abs_file_path = os.path.abspath(file_path)
     task = run_tax_forecast_task.delay(abs_file_path, forecast_date, groups_dict)
     
+    # Сохраняем ID задачи в Redis
+    training_status_manager.set_tax_task(task.id)
+    
     return {"task_id": task.id}
 
 @router.get("/status/{task_id}")
@@ -87,3 +91,9 @@ async def download_result(request: Request, task_id: str):
 async def stop_forecast(request: Request, task_id: str):
     celery_app.control.revoke(task_id, terminate=True)
     return {"status": "Task revoked"}
+
+@router.get("/active-task")
+@require_authentication
+async def get_active_task(request: Request):
+    task_id = training_status_manager.get_current_tax_task()
+    return {"task_id": task_id}

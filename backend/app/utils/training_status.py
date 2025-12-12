@@ -26,7 +26,9 @@ class TrainingStatusManager:
             'percentage': 'training_progress:percentage',
             'current_task_id': 'current_train_task_id',
             # Глобальный статус завершенного обучения (видят ВСЕ пользователи)
-            'last_completed_training': 'last_completed_training'
+            'last_completed_training': 'last_completed_training',
+            # Статус прогноза налогов
+            'tax_current_task_id': 'tax_forecast:current_task_id'
         }
     @staticmethod
     def _build_redis_url():
@@ -223,6 +225,41 @@ class TrainingStatusManager:
             self.redis_client.delete(self.KEYS['last_completed_training'])
         except Exception as e:
             print(f"Error clearing last completed training: {e}")
+    
+    def set_tax_task(self, task_id: str) -> None:
+        """
+        Установка ID текущей задачи прогноза налогов
+        
+        Args:
+            task_id: ID задачи прогноза налогов
+        """
+        try:
+            self.redis_client.set(self.KEYS['tax_current_task_id'], task_id)
+        except Exception as e:
+            print(f"Error setting tax task: {e}")
+
+    def get_current_tax_task(self) -> Optional[str]:
+        """
+        Получение ID текущей задачи прогноза налогов
+        
+        Returns:
+            ID задачи прогноза налогов или None если задача не запущена
+        """
+        try:
+            task_id = self.redis_client.get(self.KEYS['tax_current_task_id'])
+            return task_id.decode('utf-8') if task_id else None
+        except Exception as e:
+            print(f"Error getting tax task: {e}")
+            return None
+            
+    def clear_tax_task(self) -> None:
+        """
+        Очистка ID текущей задачи прогноза налогов
+        """
+        try:
+            self.redis_client.delete(self.KEYS['tax_current_task_id'])
+        except Exception as e:
+            print(f"Error clearing tax task: {e}")
 
 
 # Singleton instance для использования в приложении
