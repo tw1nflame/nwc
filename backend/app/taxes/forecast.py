@@ -5,8 +5,8 @@ import logging
 from pandas.tseries.offsets import MonthEnd
 from datetime import datetime
 from functools import reduce
-from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict, extract_ensemble_info
-from .utils.tax_pipeline import generate_monthly_period
+from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
+from .utils.tax_pipeline import generate_monthly_period, extract_ensemble_info
 from .utils.excel_formatter import save_dataframes_to_excel
 
 # Get absolute path to pretrained_models directory
@@ -297,6 +297,16 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
                 factor=factor,
                 DATE_COLUMN='Дата'
             )
+            DF_ENSMBLE_INFO['Дата'] = pd.to_datetime(DF_ENSMBLE_INFO['Дата'])
+
+            if not DF_ENSMBLE_INFO.empty:
+                try:
+                    last_ensemble_row = DF_ENSMBLE_INFO.sort_values('Дата').iloc[-1]
+                    log_msg = f"TAX FORECAST ENSEMBLE | Factor: {factor} | Item: {item_id} | Date: {last_ensemble_row['Дата']} | Weights: {last_ensemble_row['Ансамбль']}"
+                    logging.info(log_msg)
+                    print(log_msg)
+                except Exception as e:
+                    logging.error(f"Error logging ensemble info: {e}")
 
             #===================== RESUTLS SAVING =======================#
             save_dataframes_to_excel(

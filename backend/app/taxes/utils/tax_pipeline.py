@@ -469,7 +469,7 @@ def generate_monthly_period(
 
 def extract_ensemble_info(data: Dict,
                           factor: str,
-                          DATE_COLUMN: str) -> pd.DataFrame:
+                          DATE_COLUMN: str = 'Дата') -> pd.DataFrame:
     """
     Извлекает веса ансамбля из структуры:
     data[factor][date_str][series_group][target] -> models dict
@@ -494,20 +494,13 @@ def extract_ensemble_info(data: Dict,
                         records.append({
                             DATE_COLUMN: pd.to_datetime(date_str),
                             'Статья': target,
-                            'Ансамбль': [rounded]
+                            'Ансамбль': rounded
                         })
                     else:
                         # fallback - если нет model_weights, но есть имя
-                        records.append({
-                            DATE_COLUMN: pd.to_datetime(date_str),
-                            'Статья': target,
-                            'Ансамбль': [ {'ensemble_name': 'WeightedEnsemble'} ]
-                        })
-                else:
-                    # Если нет WeightedEnsemble - можно пропустить или добавить запись с info
-                    continue
-
+                        pass
+    
     if not records:
         return pd.DataFrame(columns=[DATE_COLUMN, 'Статья', 'Ансамбль'])
-
-    return pd.DataFrame(records).reset_index(drop=True)
+        
+    return pd.DataFrame(records)
