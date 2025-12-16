@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
+import { useConfig } from "@/context/ConfigContext"
 import { useRouter } from "next/navigation"
 import { TechAccessPanel } from "./TechAccessPanel"
 import { motion, AnimatePresence } from "framer-motion"
@@ -47,7 +48,8 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
   const handleLogDownload = () => {
   }
 
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+  const { config } = useConfig()
   const router = useRouter()
 
   const handleLogout = async () => {
@@ -117,33 +119,35 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-700 font-semibold">Налоги</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange("tax-forecast")}
-                  isActive={currentPage === "tax-forecast"}
-                  className="w-full justify-start"
-                >
-                  <Calculator className="w-4 h-4" />
-                  <span>Прогноз налогов</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange("tax-export")}
-                  isActive={currentPage === "tax-export"}
-                  className="w-full justify-start"
-                >
-                  <FileDown className="w-4 h-4" />
-                  <span>Выгрузка</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {config?.allowed_tax_users?.includes(user?.email) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-gray-700 font-semibold">Налоги</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => onPageChange("tax-forecast")}
+                    isActive={currentPage === "tax-forecast"}
+                    className="w-full justify-start"
+                  >
+                    <Calculator className="w-4 h-4" />
+                    <span>Прогноз налогов</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => onPageChange("tax-export")}
+                    isActive={currentPage === "tax-export"}
+                    className="w-full justify-start"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    <span>Выгрузка</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupContent>
