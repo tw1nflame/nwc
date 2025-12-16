@@ -47,9 +47,8 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
 
     for factor, item_ids in group_companies.items():
         for item_id in item_ids:
-            processed_items += 1
             if progress_callback:
-                # Pass message, current, total
+                # Pass message, current (completed), total
                 progress_callback(f"{factor} | {item_id}", processed_items, total_items)
             
             standart_cols = [
@@ -316,3 +315,5 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
                 },
                 prev_result_file_name
             )
+            
+            processed_items += 1

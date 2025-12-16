@@ -317,6 +317,24 @@ function StatusIndicator({ status, onClearStatus, currentTaskId }: { status: any
       {/* Детальный прогресс (показываем только во время обучения) */}
       {(status?.state === "running" || status?.state === "pending") && (
         <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-gray-700">Общий прогресс</span>
+                    <span className="text-blue-600 font-semibold">{status?.percent || 0}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div 
+                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${status?.percent || 0}%` }}
+                    />
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Обработано: {status?.current || 0} из {status?.total || '?'}</span>
+                </div>
+            </div>
+
+            {/* Current Task / Item - Blue Box */}
             <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
@@ -324,37 +342,14 @@ function StatusIndicator({ status, onClearStatus, currentTaskId }: { status: any
                     </div>
                 </div>
                 <div className="flex-grow min-w-0">
-                    <p className="text-sm font-medium text-blue-900">Выполняется:</p>
-                    <p className="text-sm text-blue-700 truncate">
-                    {status?.currentTask || "Инициализация..."}
+                    <p className="text-sm font-medium text-blue-900">
+                        {status?.currentItem ? "Обрабатывается статья:" : "Выполняется:"}
+                    </p>
+                    <p className="text-sm text-blue-700 truncate" title={status?.currentItem || status?.currentTask}>
+                    {status?.currentItem || status?.currentTask || "Инициализация..."}
                     </p>
                 </div>
             </div>
-
-            {/* Progress Bar */}
-            {typeof status?.percent === 'number' && (
-                <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-sm text-gray-600">
-                        <span>Общий прогресс</span>
-                        <span className="font-medium">{status.percent}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                            className="h-full bg-blue-600 transition-all duration-500 ease-out"
-                            style={{ width: `${status.percent}%` }}
-                        />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500">
-                        <span>Обработано: {status.current || 0} из {status.total || '?'}</span>
-                    </div>
-                    {status.currentItem && (
-                        <div className="text-xs text-gray-500 mt-1">
-                            <span className="font-medium">Обрабатывается статья:</span> <br/>
-                            <span className="text-gray-700">{status.currentItem}</span>
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
       )}
     </motion.div>
