@@ -291,6 +291,3 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
             cleanup_model_folders(logger=logger)
         except Exception as cleanup_error:
             logger.error(f"⚠️ Ошибка при очистке моделей в задаче налогов: {cleanup_error}")
-        # Очищаем статус активной задачи при ошибке
-        training_status_manager.clear_tax_task()
-        raise e
