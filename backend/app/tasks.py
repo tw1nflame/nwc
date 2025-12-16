@@ -284,10 +284,3 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
             'completed_at': datetime.now().isoformat()
         })
         raise e
-        
-    finally:
-        # Очищаем папки с моделями (AutogluonModels, models) чтобы не копились
-        try:
-            cleanup_model_folders(logger=logger)
-        except Exception as cleanup_error:
-            logger.error(f"⚠️ Ошибка при очистке моделей в задаче налогов: {cleanup_error}")

@@ -5,7 +5,7 @@ import logging
 from pandas.tseries.offsets import MonthEnd
 from datetime import datetime
 from functools import reduce
-from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict
+from .utils.tax_pipeline import predict_individual, get_naive_predict, get_svr_predict, get_linreg_with_bias_predict, get_linreg_without_bias_predict, get_RFR_predict, extract_ensemble_info
 from .utils.tax_pipeline import generate_monthly_period
 from .utils.excel_formatter import save_dataframes_to_excel
 
@@ -292,18 +292,11 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
                 all_models[f'{column} отклонение %'] = (all_models[f'{TARGET_COLUMN}_fact'] - all_models[column]) / all_models[f'{TARGET_COLUMN}_fact']
 
             #===================== ENSEMBLE INFO DATAFRAME =======================#
-            data = model_info
-            df_ensmbl_infos = []
-            for date in data[factor]:
-                for target in data[factor][date][item_id]:
-                    dct = data[factor][date][item_id][target]["WeightedEnsemble"]["model_weights"]
-                    for key, value in dct.items():
-                        dct[key] = round(value, 4)
-                    month_pred_info = pd.DataFrame({'Дата': [date], 'Статья': [target], 'Ансамбль': [dct]})
-                    df_ensmbl_infos.append(month_pred_info)
-            
-            DF_ENSMBLE_INFO = pd.concat(df_ensmbl_infos).reset_index(drop=True)
-            DF_ENSMBLE_INFO['Дата'] = pd.to_datetime(DF_ENSMBLE_INFO['Дата'])
+            DF_ENSMBLE_INFO = extract_ensemble_info(
+                data=model_info,
+                factor=factor,
+                DATE_COLUMN='Дата'
+            )
 
             #===================== RESUTLS SAVING =======================#
             save_dataframes_to_excel(

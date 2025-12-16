@@ -217,41 +217,50 @@ def calculate_errors(all_models: pd.DataFrame) -> pd.DataFrame:
     
     return all_models
 
-def extract_ensemble_info(data: Dict, 
-                         factor: str, 
-                         DATE_COLUMN: str) -> pd.DataFrame:
+def extract_ensemble_info(data: Dict,
+                          factor: str,
+                          DATE_COLUMN: str) -> pd.DataFrame:
     """
-    Извлекает информацию о весах ансамбля моделей.
-    
-    Параметры:
-        data: Словарь с информацией о моделях
-        factor: Фактор/ключ для доступа к данным
-        DATE_COLUMN: Название столбца с датой
-    
-    Возвращает:
-        DataFrame с информацией о весах ансамблей
+    Извлекает веса ансамбля из структуры:
+    data[factor][date_str][series_group][target] -> models dict
     """
-    ensemble_records = []
-    
-    for date in data.get(factor, {}):
-        for target in data[factor][date].get(factor, {}):
-            model_weights = data[factor][date][factor][target].get(
-                "WeightedEnsemble", {}).get("model_weights", {})
-            
-            if model_weights:
-                # Округляем веса и создаем запись
-                rounded_weights = {k: round(v, 4) for k, v in model_weights.items()}
-                record = {
-                    DATE_COLUMN: date,
-                    'Статья': target,
-                    'Ансамбль': [rounded_weights]  # Сохраняем как список для DataFrame
-                }
-                ensemble_records.append(pd.DataFrame(record))
-    
-    if not ensemble_records:
+    records = []
+    if factor not in data:
         return pd.DataFrame(columns=[DATE_COLUMN, 'Статья', 'Ансамбль'])
-    
-    return pd.concat(ensemble_records).reset_index(drop=True)
+
+    for date_str, series_group_dict in data[factor].items():
+        for series_group, target_dict in series_group_dict.items():
+            # series_group, например "my_target_series"
+            for target, model_info in target_dict.items():
+                # target, например "RUB"
+                if not isinstance(model_info, dict):
+                    continue
+                # ищем WeightedEnsemble
+                if 'WeightedEnsemble' in model_info:
+                    we_meta = model_info['WeightedEnsemble']
+                    weights = we_meta.get('model_weights')
+                    if weights:
+                        rounded = {k: round(v, 4) for k,v in weights.items()}
+                        records.append({
+                            DATE_COLUMN: pd.to_datetime(date_str),
+                            'Статья': target,
+                            'Ансамбль': [rounded]
+                        })
+                    else:
+                        # fallback - если нет model_weights, но есть имя
+                        records.append({
+                            DATE_COLUMN: pd.to_datetime(date_str),
+                            'Статья': target,
+                            'Ансамбль': [ {'ensemble_name': 'WeightedEnsemble'} ]
+                        })
+                else:
+                    # Если нет WeightedEnsemble - можно пропустить или добавить запись с info
+                    continue
+
+    if not records:
+        return pd.DataFrame(columns=[DATE_COLUMN, 'Статья', 'Ансамбль'])
+
+    return pd.DataFrame(records).reset_index(drop=True)
 
 def load_and_save_config():
     st.title("Конфигурация проекта")
