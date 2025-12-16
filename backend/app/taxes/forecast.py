@@ -299,15 +299,6 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
             )
             DF_ENSMBLE_INFO['Дата'] = pd.to_datetime(DF_ENSMBLE_INFO['Дата'])
 
-            if not DF_ENSMBLE_INFO.empty:
-                try:
-                    last_ensemble_row = DF_ENSMBLE_INFO.sort_values('Дата').iloc[-1]
-                    log_msg = f"TAX FORECAST ENSEMBLE | Factor: {factor} | Item: {item_id} | Date: {last_ensemble_row['Дата']} | Weights: {last_ensemble_row['Ансамбль']}"
-                    logging.info(log_msg)
-                    print(log_msg)
-                except Exception as e:
-                    logging.error(f"Error logging ensemble info: {e}")
-
             #===================== RESUTLS SAVING =======================#
             save_dataframes_to_excel(
                 {
