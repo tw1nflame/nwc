@@ -249,9 +249,15 @@ def save_excel_to_db(filename: str, file_content: bytes):
                     
                     if isinstance(info_val, str):
                         try:
-                            info_val = json.loads(info_val.replace("'", '"'))
-                        except:
-                            pass 
+                            # Try standard JSON first
+                            info_val = json.loads(info_val)
+                        except json.JSONDecodeError:
+                            try:
+                                # Fallback for single quotes (legacy data)
+                                info_val = json.loads(info_val.replace("'", '"'))
+                            except Exception as e:
+                                logger.warning(f"Failed to parse ensemble info for {factor}|{item_id}|{date}: {e}")
+                                pass 
                     
                     if isinstance(info_val, dict):
                         for model_name, weight in info_val.items():

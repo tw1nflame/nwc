@@ -2,6 +2,7 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
+import json
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -490,11 +491,11 @@ def extract_ensemble_info(data: Dict,
                     we_meta = model_info['WeightedEnsemble']
                     weights = we_meta.get('model_weights')
                     if weights:
-                        rounded = {k: round(v, 4) for k,v in weights.items()}
+                        rounded = {k: round(float(v), 4) for k,v in weights.items()}
                         records.append({
                             DATE_COLUMN: pd.to_datetime(date_str),
                             'Статья': target,
-                            'Ансамбль': rounded
+                            'Ансамбль': json.dumps(rounded)
                         })
                     else:
                         # fallback - если нет model_weights, но есть имя
