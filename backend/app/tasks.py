@@ -219,15 +219,15 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
                 with open(file_path, 'rb') as f:
                     save_excel_to_db(filename, f.read())
                     
-        # 6. Zip results
-        self.update_state(state='PROGRESS', meta={'status': 'Zipping results...'})
+        # 6. Zip results - REMOVED as we generate it on demand
+        # self.update_state(state='PROGRESS', meta={'status': 'Zipping results...'})
         # Create zip in a known location
-        zip_name = f"forecast_results_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        zip_path = shutil.make_archive(zip_name, 'zip', 'results')
+        # zip_name = f"forecast_results_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        # zip_path = shutil.make_archive(zip_name, 'zip', 'results')
         
         # Move zip to a static folder if needed, or just return the path
         # For now, return the absolute path
-        abs_zip_path = os.path.abspath(zip_path)
+        # abs_zip_path = os.path.abspath(zip_path)
         
         # Очищаем статус активной задачи
         training_status_manager.clear_tax_task()
@@ -236,10 +236,10 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         training_status_manager.save_completed_tax_forecast({
             'status': 'done',
             'completed_at': datetime.now().isoformat(),
-            'zip_path': abs_zip_path
+            # 'zip_path': abs_zip_path
         })
         
-        return {'status': 'Completed', 'zip_path': abs_zip_path}
+        return {'status': 'Completed'}
         
     except Exception as e:
         logger.error(f"Task failed: {e}")

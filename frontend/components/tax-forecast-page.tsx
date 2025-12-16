@@ -425,7 +425,7 @@ export function TaxForecastPage() {
       }
 
       checkActiveTask()
-  }, [session, currentTaskId])
+  }, [session?.access_token, currentTaskId])
 
   const toggleSelection = (option: string) => {
       if (selectedPairs.includes(option)) {
