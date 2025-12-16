@@ -359,7 +359,8 @@ def restore_excel_from_db(factor: str, item_id: str) -> bytes:
                     grouped = df_weights_long.groupby(['Дата', 'Статья'])
                     for (date, target), group in grouped:
                         weights = dict(zip(group['model_name'], group['weight']))
-                        records.append({'Дата': date, 'Статья': target, 'Ансамбль': weights})
+                        # Serialize to JSON string to match save format
+                        records.append({'Дата': date, 'Статья': target, 'Ансамбль': json.dumps(weights, ensure_ascii=False)})
                     
                     df_info = pd.DataFrame(records)
                     df_info = df_info.sort_values('Дата')
