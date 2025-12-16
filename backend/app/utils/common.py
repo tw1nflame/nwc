@@ -364,3 +364,84 @@ def cleanup_model_folders(base_path: str = None, logger=None):
     return cleanup_stats
 
 
+def cleanup_temp_files(logger=None, task_type='all'):
+    """
+    Очищает временные файлы, которые могли накопиться от предыдущих запусков.
+    Удаляет файлы старше 1 часа.
+    
+    Args:
+        logger: Логгер
+        task_type: Тип задачи ('training', 'taxes', 'all')
+            - 'training': очищает training_files и results (файлы predict_*)
+            - 'taxes': очищает temp_uploads, data и папки экспорта налогов
+            - 'all': очищает всё (по умолчанию)
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        
+    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
+    folders_to_clean = []
+    
+    # Определяем папки в зависимости от типа задачи
+    if task_type == 'training' or task_type == 'all':
+        folders_to_clean.extend([
+            os.path.join(base_path, 'training_files'),
+            os.path.join(base_path, 'results')
+        ])
+        
+    if task_type == 'taxes' or task_type == 'all':
+        folders_to_clean.extend([
+            os.path.join(base_path, 'temp_uploads'),
+            os.path.join(base_path, 'data')
+        ])
+    
+    import time
+    current_time = time.time()
+    max_age = 3600  # 1 час
+    
+    logger.info(f"🧹 Запуск очистки старых временных файлов (тип: {task_type})...")
+    
+    for folder in folders_to_clean:
+        if os.path.exists(folder):
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        # Фильтрация файлов по типу задачи
+                        if task_type == 'training':
+                            # В results удаляем только predict_*.xlsx
+                            if folder.endswith('results') and not filename.startswith('predict_'):
+                                continue
+                            # В training_files удаляем только uploaded_data_*, prev_*, adjustments_*
+                            if folder.endswith('training_files') and not (
+                                filename.startswith('uploaded_data_') or 
+                                filename.startswith('prev_') or 
+                                filename.startswith('adjustments_')
+                            ):
+                                continue
+                        
+                        # Удаляем файлы старше max_age
+                        if current_time - os.path.getmtime(file_path) > max_age:
+                            os.remove(file_path)
+                            logger.info(f"🗑️ Удален старый файл: {file_path}")
+                except Exception as e:
+                    logger.error(f"Ошибка при проверке/удалении {file_path}: {e}")
+
+    # Очистка временных папок экспорта (temp_tax_export_*) в корне app - ТОЛЬКО для налогов
+    if task_type == 'taxes' or task_type == 'all':
+        try:
+            for filename in os.listdir(base_path):
+                if filename.startswith('temp_tax_export_'):
+                    dir_path = os.path.join(base_path, filename)
+                    if os.path.isdir(dir_path):
+                        try:
+                            if current_time - os.path.getmtime(dir_path) > max_age:
+                                shutil.rmtree(dir_path)
+                                logger.info(f"🗑️ Удалена старая папка экспорта: {dir_path}")
+                        except Exception as e:
+                            logger.error(f"Ошибка при удалении папки {dir_path}: {e}")
+        except Exception as e:
+            logger.error(f"Ошибка при сканировании base_path для очистки папок: {e}")
+
+

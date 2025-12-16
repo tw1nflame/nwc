@@ -330,6 +330,31 @@ function StatusIndicator({ status, onClearStatus, currentTaskId }: { status: any
                     </p>
                 </div>
             </div>
+
+            {/* Progress Bar */}
+            {typeof status?.percent === 'number' && (
+                <div className="space-y-2 pt-2">
+                    <div className="flex justify-between text-sm text-gray-600">
+                        <span>Общий прогресс</span>
+                        <span className="font-medium">{status.percent}%</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-600 transition-all duration-500 ease-out"
+                            style={{ width: `${status.percent}%` }}
+                        />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                        <span>Обработано: {status.current || 0} из {status.total || '?'}</span>
+                    </div>
+                    {status.currentItem && (
+                        <div className="text-xs text-gray-500 mt-1">
+                            <span className="font-medium">Обрабатывается статья:</span> <br/>
+                            <span className="text-gray-700">{status.currentItem}</span>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
       )}
     </motion.div>
@@ -413,7 +438,13 @@ export function TaxForecastPage() {
                   if (lastStatus.status === 'done') {
                       setStatus({ 
                           state: "done", 
-                          message: "Прогноз успешно завершен!",
+                          message: lastStatus.message || "Прогноз успешно завершен!",
+                          completedAt: lastStatus.completed_at
+                      })
+                  } else if (lastStatus.status === 'error') {
+                      setStatus({
+                          state: "error",
+                          message: lastStatus.message || `Ошибка: ${lastStatus.error}`,
                           completedAt: lastStatus.completed_at
                       })
                   }
@@ -507,12 +538,12 @@ export function TaxForecastPage() {
               
               if (data.status === "SUCCESS") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-                  setStatus({ state: "done", message: "Прогноз успешно завершен!", taskId: taskId })
+                  setStatus({ state: "done", message: "Прогноз налогов готов. Данные сохранены в БД.", taskId: taskId })
                   // Don't clear currentTaskId immediately so we can use it for download
                   // setCurrentTaskId(null) 
               } else if (data.status === "FAILURE") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
-                  setStatus({ state: "error", message: `Ошибка: ${data.error}` })
+                  setStatus({ state: "error", message: `Ошибка при прогнозе налогов: ${data.error}` })
                   setCurrentTaskId(null)
               } else if (data.status === "REVOKED") {
                   if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
@@ -520,7 +551,14 @@ export function TaxForecastPage() {
                   setCurrentTaskId(null)
               } else if (data.status === "PROGRESS") {
                   if (data.meta && data.meta.status) {
-                      setStatus({ state: "running", currentTask: data.meta.status })
+                      setStatus({ 
+                          state: "running", 
+                          currentTask: data.meta.status,
+                          percent: data.meta.percent,
+                          current: data.meta.current,
+                          total: data.meta.total,
+                          currentItem: data.meta.current_item
+                      })
                   }
               }
           } catch (e) {

@@ -2,7 +2,7 @@ from celery_app import celery_app
 from utils.config import load_config
 from utils.datahandler import load_and_transform_data
 from utils.pipelines import run_base_plus_pipeline, run_base_pipeline
-from utils.common import generate_monthly_period, setup_custom_logging
+from utils.common import generate_monthly_period, setup_custom_logging, cleanup_temp_files, cleanup_model_folders
 from utils.db_usage import upload_pipeline_result_to_db, SHEET_TO_TABLE, set_pipeline_column, export_pipeline_tables_to_excel, process_exchange_rate_file
 from utils.training_status import training_status_manager
 from taxes.data_preparation import prepare_tax_data
@@ -29,6 +29,11 @@ TRAINING_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tr
 @celery_app.task(bind=True, track_started=True)
 def train_task(self, pipeline, items_list, date, data_path, result_file_name):
     logger.info(f"🚀 Начало задачи train_task: pipeline={pipeline}, items={len(items_list)}, date={date}")
+    
+    # Очистка старых временных файлов перед запуском (только для обучения)
+    cleanup_temp_files(logger, task_type='training')
+    
+    prev_path = None
     
     config = load_config(CONFIG_PATH)
     DATE_COLUMN = config['DATE_COLUMN']
@@ -139,7 +144,15 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
         # 3. ВАЖНО: Очищаем current_task_id - разблокируем запуск нового обучения
         training_status_manager.redis_client.delete(training_status_manager.KEYS['current_task_id'])
         
-        logger.info(f"✅ Задача train_task успешно завершена: {result_file_name}")
+        # Успешное завершение - удаляем файл результатов, так как данные уже в БД
+        try:
+            if os.path.exists(result_file_name):
+                os.remove(result_file_name)
+                logger.info(f"🗑️ Удален файл результатов (данные в БД): {result_file_name}")
+        except Exception as e:
+            logger.warning(f"Не удалось удалить файл результатов: {e}")
+
+        logger.info(f"✅ Задача train_task успешно завершена")
         return {"status": "done"}
         
     except Exception as e:
@@ -172,15 +185,31 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
         
         return {"status": "error", "error": str(e)}
 
+    finally:
+        # Всегда удаляем входные временные файлы (они больше не нужны)
+        try:
+            if prev_path and os.path.exists(prev_path):
+                os.remove(prev_path)
+                logger.info(f"🗑️ Удален временный файл prev: {prev_path}")
+            
+            if data_path and os.path.exists(data_path):
+                os.remove(data_path)
+                logger.info(f"🗑️ Удален загруженный файл данных: {data_path}")
+            
+            # Очищаем папки с моделями (AutogluonModels, models) чтобы не копились
+            cleanup_model_folders(logger=logger)
+            
+        except Exception as cleanup_error:
+            logger.error(f"⚠️ Ошибка при очистке входных файлов: {cleanup_error}")
+
 @celery_app.task(bind=True)
 def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, selected_groups: dict):
     try:
         # 1. Init DB
         init_db()
-        
-        # Clean up results directory to avoid stale files
-        if os.path.exists('results'):
-            shutil.rmtree('results')
+            
+        # 2. Prepare Data
+        init_db()
             
         # 2. Prepare Data
         self.update_state(state='PROGRESS', meta={'status': 'Preparing data...'})
@@ -206,8 +235,15 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         # forecast_date_str is expected to be YYYY-MM-DD
         forecast_date = datetime.strptime(forecast_date_str, "%Y-%m-%d")
         
-        def progress_callback(msg):
-            self.update_state(state='PROGRESS', meta={'status': f'Forecasting: {msg}'})
+        def progress_callback(msg, current, total):
+            percent = round((current / total) * 100, 1) if total > 0 else 0
+            self.update_state(state='PROGRESS', meta={
+                'status': f'Forecasting: {msg}',
+                'current': current,
+                'total': total,
+                'percent': percent,
+                'current_item': msg
+            })
             
         forecast_taxes(forecast_date, selected_groups, progress_callback=progress_callback)
         
@@ -219,15 +255,6 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
                 with open(file_path, 'rb') as f:
                     save_excel_to_db(filename, f.read())
                     
-        # 6. Zip results - REMOVED as we generate it on demand
-        # self.update_state(state='PROGRESS', meta={'status': 'Zipping results...'})
-        # Create zip in a known location
-        # zip_name = f"forecast_results_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        # zip_path = shutil.make_archive(zip_name, 'zip', 'results')
-        
-        # Move zip to a static folder if needed, or just return the path
-        # For now, return the absolute path
-        # abs_zip_path = os.path.abspath(zip_path)
         
         # Очищаем статус активной задачи
         training_status_manager.clear_tax_task()
@@ -235,6 +262,7 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
         # Сохраняем статус завершенного прогноза
         training_status_manager.save_completed_tax_forecast({
             'status': 'done',
+            'message': 'Прогноз налогов готов. Данные сохранены в БД.',
             'completed_at': datetime.now().isoformat(),
             # 'zip_path': abs_zip_path
         })
@@ -244,6 +272,25 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
     except Exception as e:
         logger.error(f"Task failed: {e}")
         self.update_state(state='FAILURE', meta={'error': str(e)})
+        
+        # Очищаем статус активной задачи при ошибке
+        training_status_manager.clear_tax_task()
+        
+        # Сохраняем статус ошибки
+        training_status_manager.save_completed_tax_forecast({
+            'status': 'error',
+            'message': f'Ошибка при прогнозе налогов: {str(e)}',
+            'error': str(e),
+            'completed_at': datetime.now().isoformat()
+        })
+        raise e
+        
+    finally:
+        # Очищаем папки с моделями (AutogluonModels, models) чтобы не копились
+        try:
+            cleanup_model_folders(logger=logger)
+        except Exception as cleanup_error:
+            logger.error(f"⚠️ Ошибка при очистке моделей в задаче налогов: {cleanup_error}")
         # Очищаем статус активной задачи при ошибке
         training_status_manager.clear_tax_task()
         raise e

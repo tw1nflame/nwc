@@ -41,11 +41,16 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
     CHOSEN_MONTH_END = CHOSEN_MONTH + MonthEnd(0)
     MONTHES_TO_PREDICT = [CHOSEN_MONTH]
 
+    # Calculate total items to process
+    total_items = sum(len(items) for items in group_companies.values())
+    processed_items = 0
 
     for factor, item_ids in group_companies.items():
         for item_id in item_ids:
+            processed_items += 1
             if progress_callback:
-                progress_callback(f"{factor} | {item_id}")
+                # Pass message, current, total
+                progress_callback(f"{factor} | {item_id}", processed_items, total_items)
             
             standart_cols = [
                 "Дата"
