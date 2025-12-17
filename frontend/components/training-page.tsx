@@ -405,8 +405,12 @@ function PredictForm({
   const [dataFile, setDataFile] = useState<File | null>(null)
 
   useEffect(() => {
-    if (config && config["Статья"]) {
-      setSelectedItems(Object.keys(config["Статья"]))
+    if (config) {
+      if (config["default_articles"]) {
+        setSelectedItems(config["default_articles"])
+      } else if (config["Статья"]) {
+        setSelectedItems(Object.keys(config["Статья"]))
+      }
     }
   }, [config])
 
