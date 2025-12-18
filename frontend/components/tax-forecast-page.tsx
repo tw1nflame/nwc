@@ -405,7 +405,7 @@ export function TaxForecastPage() {
 
           try {
               // 1. Check for active task
-              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/active-task`, {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/active-task`, {
                   headers: {
                       "Authorization": `Bearer ${session.access_token}`
                   }
@@ -422,7 +422,7 @@ export function TaxForecastPage() {
               }
 
               // 2. If no active task, check for last completed status
-              const lastStatusResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/last-completed`, {
+              const lastStatusResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/last-completed`, {
                   headers: {
                       "Authorization": `Bearer ${session.access_token}`
                   }
@@ -486,7 +486,7 @@ export function TaxForecastPage() {
           formData.append("selected_groups", JSON.stringify(selectedPairs))
           
           const token = session?.access_token
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/forecast`, {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/forecast`, {
               method: "POST",
               headers: {
                   "Authorization": `Bearer ${token}`
@@ -521,7 +521,7 @@ export function TaxForecastPage() {
 
       pollingIntervalRef.current = setInterval(async () => {
           try {
-              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/status/${taskId}`, {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/status/${taskId}`, {
                   headers: {
                       "Authorization": `Bearer ${token}`
                   }
@@ -573,7 +573,7 @@ export function TaxForecastPage() {
 
       try {
           const token = session?.access_token
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/stop/${currentTaskId}`, {
+          await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/stop/${currentTaskId}`, {
               method: "POST",
               headers: {
                   "Authorization": `Bearer ${token}`
@@ -589,7 +589,7 @@ export function TaxForecastPage() {
   const handleClearStatus = async () => {
       try {
           const token = session?.access_token
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/taxes/clear-status`, {
+          await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/taxes/clear-status`, {
               method: "POST",
               headers: {
                   "Authorization": `Bearer ${token}`
