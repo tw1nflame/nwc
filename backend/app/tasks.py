@@ -11,6 +11,7 @@ from taxes.db import init_db, get_all_forecast_pairs, restore_excel_from_db, sav
 import os
 from datetime import datetime
 import shutil
+import base64
 
 # Устанавливаем флаг для Celery worker чтобы избежать дублирования логов
 os.environ['CELERY_WORKER_PROCESS'] = '1'
@@ -203,16 +204,24 @@ def train_task(self, pipeline, items_list, date, data_path, result_file_name):
             logger.error(f"⚠️ Ошибка при очистке входных файлов: {cleanup_error}")
 
 @celery_app.task(bind=True)
-def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, selected_groups: dict):
+def run_tax_forecast_task(self, file_content_b64: str, filename: str, forecast_date_str: str, selected_groups: dict):
+    history_file_path = None
     try:
         # 1. Init DB
         init_db()
             
         # 2. Prepare Data
-        init_db()
-            
-        # 2. Prepare Data
         self.update_state(state='PROGRESS', meta={'status': 'Preparing data...'})
+        
+        # Save content to temp file
+        os.makedirs("temp_uploads", exist_ok=True)
+        history_file_path = f"temp_uploads/{filename}"
+        
+        # Decode base64 and write to file
+        file_content = base64.b64decode(file_content_b64)
+        with open(history_file_path, "wb") as f:
+            f.write(file_content)
+            
         # Ensure data directory exists as prepare_tax_data might need it or use it
         os.makedirs('data', exist_ok=True)
         prepare_tax_data(history_file_path)
@@ -284,3 +293,10 @@ def run_tax_forecast_task(self, history_file_path: str, forecast_date_str: str, 
             'completed_at': datetime.now().isoformat()
         })
         raise e
+    finally:
+        # Cleanup temp file
+        if history_file_path and os.path.exists(history_file_path):
+            try:
+                os.remove(history_file_path)
+            except Exception as e:
+                logger.error(f"Error cleaning up temp file {history_file_path}: {e}")

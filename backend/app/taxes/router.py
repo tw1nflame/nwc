@@ -6,6 +6,7 @@ from celery_app import celery_app
 import os
 import json
 import shutil
+import base64
 from datetime import datetime
 from utils.auth import require_authentication
 from utils.training_status import training_status_manager
@@ -30,11 +31,9 @@ async def start_forecast(
     forecast_date: str = Form(...),
     selected_groups: str = Form(...) # JSON string of list of strings
 ):
-    # Save history file
-    os.makedirs("temp_uploads", exist_ok=True)
-    file_path = f"temp_uploads/{history_file.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(history_file.file, buffer)
+    # Read file content and encode to base64
+    file_content = await history_file.read()
+    file_content_b64 = base64.b64encode(file_content).decode('utf-8')
         
     # Parse groups
     try:
@@ -61,9 +60,8 @@ async def start_forecast(
     # Clear previous completed status
     training_status_manager.clear_last_completed_tax_forecast()
 
-    # Use absolute path for file_path as Celery worker might be in different dir
-    abs_file_path = os.path.abspath(file_path)
-    task = run_tax_forecast_task.delay(abs_file_path, forecast_date, groups_dict)
+    # Pass file content instead of path
+    task = run_tax_forecast_task.delay(file_content_b64, history_file.filename, forecast_date, groups_dict)
     
     # Сохраняем ID задачи в Redis
     training_status_manager.set_tax_task(task.id)
