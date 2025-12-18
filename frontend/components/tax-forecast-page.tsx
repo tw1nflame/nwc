@@ -616,7 +616,7 @@ export function TaxForecastPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-8 pt-0">
-        <div className="max-w-5xl mx-auto space-y-8 pb-12">
+        <div className="w-full space-y-8 pb-12">
             
             <Card className="border-none shadow-sm bg-white/80 backdrop-blur">
                 <CardHeader>
