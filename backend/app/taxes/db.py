@@ -8,6 +8,8 @@ import io
 import json
 from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
+import tempfile
+from .utils.excel_formatter import save_dataframes_to_excel
 
 load_dotenv()
 
@@ -288,89 +290,99 @@ def save_excel_to_db(filename: str, file_content: bytes):
 
 def restore_excel_from_db(factor: str, item_id: str) -> bytes:
     engine = get_db_engine()
-    output = io.BytesIO()
+    dataframes = {}
+    
     try:
         with engine.connect() as conn:
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # 1. Data
-                # Get facts
-                df_facts = pd.read_sql(text("""
-                    SELECT date as "Дата", fact_value as "Разница Активов и Пассивов_fact"
-                    FROM tax_forecast_facts
-                    WHERE factor = :factor AND item_id = :item_id
-                """), conn, params={"factor": factor, "item_id": item_id})
-                
-                # Get predictions
-                df_preds_long = pd.read_sql(text("""
-                    SELECT date as "Дата", metric_name, value
-                    FROM tax_forecast_predictions
-                    WHERE factor = :factor AND item_id = :item_id
-                """), conn, params={"factor": factor, "item_id": item_id})
-                
-                if not df_preds_long.empty:
-                    df_preds = df_preds_long.pivot(index='Дата', columns='metric_name', values='value').reset_index()
-                    # Merge
-                    if not df_facts.empty:
-                        df_data = pd.merge(df_facts, df_preds, on='Дата', how='outer')
-                    else:
-                        df_data = df_preds
+            # 1. Data
+            # Get facts
+            df_facts = pd.read_sql(text("""
+                SELECT date as "Дата", fact_value as "Разница Активов и Пассивов_fact"
+                FROM tax_forecast_facts
+                WHERE factor = :factor AND item_id = :item_id
+            """), conn, params={"factor": factor, "item_id": item_id})
+            
+            # Get predictions
+            df_preds_long = pd.read_sql(text("""
+                SELECT date as "Дата", metric_name, value
+                FROM tax_forecast_predictions
+                WHERE factor = :factor AND item_id = :item_id
+            """), conn, params={"factor": factor, "item_id": item_id})
+            
+            if not df_preds_long.empty:
+                df_preds = df_preds_long.pivot(index='Дата', columns='metric_name', values='value').reset_index()
+                # Merge
+                if not df_facts.empty:
+                    df_data = pd.merge(df_facts, df_preds, on='Дата', how='outer')
                 else:
-                    df_data = df_facts
-                    
-                if not df_data.empty:
-                    df_data = df_data.sort_values('Дата')
-                    df_data.to_excel(writer, sheet_name='data', index=False)
+                    df_data = df_preds
+            else:
+                df_data = df_facts
                 
-                # 2. Coeffs
-                df_coeffs_long = pd.read_sql(text("""
-                    SELECT date as "Дата", feature_name, value
-                    FROM tax_forecast_coeffs 
-                    WHERE factor = :factor AND item_id = :item_id
-                """), conn, params={"factor": factor, "item_id": item_id})
-                
-                if not df_coeffs_long.empty:
-                    df_coeffs = df_coeffs_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
-                    df_coeffs = df_coeffs.sort_values('Дата')
-                    df_coeffs.to_excel(writer, sheet_name='coeffs', index=False)
+            if not df_data.empty:
+                df_data = df_data.sort_values('Дата')
+                dataframes['data'] = df_data
+            
+            # 2. Coeffs
+            df_coeffs_long = pd.read_sql(text("""
+                SELECT date as "Дата", feature_name, value
+                FROM tax_forecast_coeffs 
+                WHERE factor = :factor AND item_id = :item_id
+            """), conn, params={"factor": factor, "item_id": item_id})
+            
+            if not df_coeffs_long.empty:
+                df_coeffs = df_coeffs_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
+                df_coeffs = df_coeffs.sort_values('Дата')
+                dataframes['coeffs'] = df_coeffs
 
-                # 3. Coeffs no intercept
-                df_coeffs_ni_long = pd.read_sql(text("""
-                    SELECT date as "Дата", feature_name, value
-                    FROM tax_forecast_coeffs_no_intercept 
-                    WHERE factor = :factor AND item_id = :item_id
-                """), conn, params={"factor": factor, "item_id": item_id})
-                
-                if not df_coeffs_ni_long.empty:
-                    df_coeffs_ni = df_coeffs_ni_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
-                    df_coeffs_ni = df_coeffs_ni.sort_values('Дата')
-                    df_coeffs_ni.to_excel(writer, sheet_name='coeffs_no_intercept', index=False)
+            # 3. Coeffs no intercept
+            df_coeffs_ni_long = pd.read_sql(text("""
+                SELECT date as "Дата", feature_name, value
+                FROM tax_forecast_coeffs_no_intercept 
+                WHERE factor = :factor AND item_id = :item_id
+            """), conn, params={"factor": factor, "item_id": item_id})
+            
+            if not df_coeffs_ni_long.empty:
+                df_coeffs_ni = df_coeffs_ni_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
+                df_coeffs_ni = df_coeffs_ni.sort_values('Дата')
+                dataframes['coeffs_no_intercept'] = df_coeffs_ni
 
-                # 4. Ensemble info
-                df_weights_long = pd.read_sql(text("""
-                    SELECT date as "Дата", target as "Статья", model_name, weight
-                    FROM tax_forecast_ensemble_weights 
-                    WHERE factor = :factor AND item_id = :item_id
-                """), conn, params={"factor": factor, "item_id": item_id})
+            # 4. Ensemble info
+            df_weights_long = pd.read_sql(text("""
+                SELECT date as "Дата", target as "Статья", model_name, weight
+                FROM tax_forecast_ensemble_weights 
+                WHERE factor = :factor AND item_id = :item_id
+            """), conn, params={"factor": factor, "item_id": item_id})
+            
+            if not df_weights_long.empty:
+                # Need to reconstruct the dict structure: {'model': weight, ...}
+                # Group by Date and Target
+                records = []
+                grouped = df_weights_long.groupby(['Дата', 'Статья'])
+                for (date, target), group in grouped:
+                    weights = dict(zip(group['model_name'], group['weight']))
+                    # Serialize to JSON string to match save format
+                    records.append({'Дата': date, 'Статья': target, 'Ансамбль': json.dumps(weights, ensure_ascii=False)})
                 
-                if not df_weights_long.empty:
-                    # Need to reconstruct the dict structure: {'model': weight, ...}
-                    # Group by Date and Target
-                    records = []
-                    grouped = df_weights_long.groupby(['Дата', 'Статья'])
-                    for (date, target), group in grouped:
-                        weights = dict(zip(group['model_name'], group['weight']))
-                        # Serialize to JSON string to match save format
-                        records.append({'Дата': date, 'Статья': target, 'Ансамбль': json.dumps(weights, ensure_ascii=False)})
-                    
-                    df_info = pd.DataFrame(records)
-                    df_info = df_info.sort_values('Дата')
-                    df_info.to_excel(writer, sheet_name='TimeSeries_ensemble_models_info', index=False)
+                df_info = pd.DataFrame(records)
+                df_info = df_info.sort_values('Дата')
+                dataframes['TimeSeries_ensemble_models_info'] = df_info
+
+        # Save using formatter
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+            tmp_path = tmp.name
+            
+        save_dataframes_to_excel(dataframes, tmp_path)
+        
+        with open(tmp_path, 'rb') as f:
+            content = f.read()
+            
+        os.remove(tmp_path)
+        return content
 
     except Exception as e:
         logger.error(f"Error restoring excel from DB: {e}")
         raise
-        
-    return output.getvalue()
 
 def get_all_forecast_pairs():
     conn = get_db_connection()
