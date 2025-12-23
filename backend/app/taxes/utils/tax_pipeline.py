@@ -140,7 +140,7 @@ def predict_individual(
                         df_for_train,
                         presets="best_quality",
                         hyperparameters=models,
-                        random_state=SEED,
+                        random_seed=SEED,
                         #hyperparameters={
                         #    #'Naive': {},
                         #    #'SeasonalNaive': {},
