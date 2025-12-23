@@ -3,6 +3,11 @@ import shutil
 import numpy as np
 import pandas as pd
 import json
+import random
+
+SEED = 42
+np.random.seed(SEED)
+random.seed(SEED)
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -135,6 +140,7 @@ def predict_individual(
                         df_for_train,
                         presets="best_quality",
                         hyperparameters=models,
+                        random_state=SEED,
                         #hyperparameters={
                         #    #'Naive': {},
                         #    #'SeasonalNaive': {},
@@ -426,7 +432,7 @@ def get_RFR_predict(WINDOWS, all_models, TARGET_COLUMN, MONTHES_TO_PREDICT):
         
         X_train, y_train = X, y
         
-        model = RandomForestRegressor()    #LinearRegression()   #Ridge(alpha=5.0)
+        model = RandomForestRegressor(random_state=SEED)    #LinearRegression()   #Ridge(alpha=5.0)
         model.fit(X_train, y_train)
         
         X_pred = df_test.drop(columns=['Дата', f'{TARGET_COLUMN}_fact'])
