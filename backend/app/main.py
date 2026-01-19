@@ -18,6 +18,8 @@ from fastapi import Request
 from utils.db_usage import export_pipeline_tables_to_excel, SHEET_TO_TABLE, process_adjustments_file
 from utils.training_status import training_status_manager
 from utils.auth import require_authentication
+from utils.validation import check_historical_data_consistency
+from utils.config import load_config
 from tech_access.router import router as tech_router
 from taxes.router import router as taxes_router
 
@@ -65,6 +67,7 @@ async def train(
     date: str = Form(...),
     data_file: UploadFile = File(...)
 ):
+    print(f"DEBUG: /train/ endpoint called with pipeline={pipeline}, date={date}, items_raw={items}")
     # Проверяем, есть ли АКТИВНАЯ задача (не завершенная!)
     task_id = training_status_manager.get_current_task_id()
     if task_id:
@@ -83,12 +86,31 @@ async def train(
     data_path = os.path.join(TRAINING_FILES_DIR, f"uploaded_data_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     with open(data_path, "wb") as f:
         shutil.copyfileobj(data_file.file, f)
+        
+    # --- ВАЛИДАЦИЯ ИСТОРИЧЕСКИХ ДАННЫХ ---
+    config = load_config(CONFIG_PATH)
+    DATE_COLUMN = config.get('DATE_COLUMN', 'Дата')
+    RATE_COLUMN = config.get('RATE_COLUMN', 'Курс')
+    
+    warnings = check_historical_data_consistency(data_path, DATE_COLUMN, RATE_COLUMN, date)
+    if warnings:
+        print("WARNINGS found during validation:", warnings)
+        
+    # -------------------------------------
+
     import json as _json
     items_list = _json.loads(items)
+    
     result_file_name = os.path.join(RESULTS_DIR, f"predict_{pipeline}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx")
     celery_task = train_task.apply_async(args=[pipeline, items_list, date, data_path, result_file_name])
-    # task_id будет установлен внутри задачи через initialize_training
-    return {"status": "ok", "task_id": celery_task.id}
+    
+    response = {"status": "ok", "task_id": celery_task.id}
+    if warnings:
+        # Добавляем предупреждения в ответ. Фронтенд может их показать.
+        response["warnings"] = warnings
+        response["message"] = "Обучение запущено, но обнаружены несоответствия в исторических данных!"
+
+    return response
 
 @app.get("/current_task_id")
 @require_authentication

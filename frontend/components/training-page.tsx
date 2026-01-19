@@ -34,6 +34,7 @@ import { fetchTrainStatus } from "./utils/trainStatus"
 import { stopTrainTask } from "./utils/stopTrain"
 import { useAuth } from "../context/AuthContext"
 import { clearTrainStatus } from "./utils/clearStatus"
+import { useToast } from "@/hooks/use-toast"
 
 
 
@@ -619,6 +620,7 @@ function PredictForm({
 export default function TrainingPage() {
   const { session } = useAuth();
   const accessToken = session?.access_token;
+  const { toast } = useToast()
   // Логируем accessToken для отладки
   const { config, loading: configLoading } = useConfig();
   const [trainStatus, setTrainStatus] = useState<any>({ status: "idle" })
@@ -660,7 +662,29 @@ export default function TrainingPage() {
   }, [polling, accessToken])
 
   const handleTrainSubmit = async ({ pipeline, selectedItems, date, dataFile }: any) => {
-    await sendTrainRequest({ pipeline, selectedItems, date, dataFile, accessToken })
+    const response = await sendTrainRequest({ pipeline, selectedItems, date, dataFile, accessToken })
+    
+    if (response && response.warnings && response.warnings.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Внимание: Расхождения в исторических данных",
+        description: (
+          <div className="mt-2 text-sm">
+            <p className="font-medium mb-1">{response.message || "Найдены отличия загруженного факта от БД:"}</p>
+            <div className="max-h-[200px] overflow-y-auto pr-2">
+              <ul className="list-disc pl-4 space-y-1 text-xs">
+                {response.warnings.map((w: string, i: number) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+            <p className="mt-2 text-xs opacity-80">Обучение все равно запущено.</p>
+          </div>
+        ),
+        duration: 20000, 
+      })
+    }
+    
     setPolling(true)
   }
 
