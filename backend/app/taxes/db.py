@@ -9,9 +9,22 @@ import json
 from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
 import tempfile
-from .utils.excel_formatter import save_dataframes_to_excel
+from ..utils.excel_formatter import save_dataframes_to_excel
+from ..utils.column_mapping import COLUMN_MAPPING, REVERSE_COLUMN_MAPPING
 
 load_dotenv()
+
+EXCLUDED_FROM_DATA_TABLE = {
+    'article', 'pipeline', 'ensemble', 'factor', 
+    'feature', 'importance', 'stddev', 'p_value', 
+    'n', 'p99_high', 'p99_low', 'adjustment_value', 
+    'description', 'w_predict_ml_tabular', 'w_predict_tabpfnmix',
+    
+    # Exclude Tabular ML, PatchTST, and TabPFNMIX columns + their diffs/pcts
+    'predict_ml_tabular', 'predict_ml_tabular_diff', 'predict_ml_tabular_pct',
+    'predict_patchtst', 'predict_patchtst_diff', 'predict_patchtst_pct',
+    'predict_tabpfnmix', 'predict_tabpfnmix_diff', 'predict_tabpfnmix_pct'
+}
 
 logger = logging.getLogger(__name__)
 
@@ -38,68 +51,73 @@ def init_db():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            # 1. Data (Facts)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tax_forecast_facts (
-                    factor TEXT,
-                    item_id TEXT,
-                    date TIMESTAMP,
-                    fact_value FLOAT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (factor, item_id, date)
-                );
-            """)
+            # 1. Tax Forecast Unified Data Table
+            # Base columns
+            columns_sql = [
+                "tax_item TEXT",
+                "item_id TEXT",
+                "date TIMESTAMP",
+                "fact FLOAT",
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ]
             
-            # 2. Predictions (Long format)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tax_forecast_predictions (
-                    factor TEXT,
-                    item_id TEXT,
-                    date TIMESTAMP,
-                    metric_name TEXT,
-                    value FLOAT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (factor, item_id, date, metric_name)
-                );
-            """)
+            # Add metric columns from mapping
+            metric_cols = set(COLUMN_MAPPING.values())
+            if 'date' in metric_cols: metric_cols.remove('date')
+            if 'fact' in metric_cols: metric_cols.remove('fact')
             
-            # 3. Coeffs
+            # Remove excluded columns
+            metric_cols = metric_cols - EXCLUDED_FROM_DATA_TABLE
+            
+            for col in sorted(metric_cols):
+                if col:
+                    columns_sql.append(f'"{col}" FLOAT')
+            
+            create_table_sql = f"""
+                CREATE TABLE IF NOT EXISTS tax_forecast_data (
+                    {', '.join(columns_sql)},
+                    PRIMARY KEY (tax_item, item_id, date)
+                );
+            """
+            cur.execute(create_table_sql)
+            
+            # 2. Coeffs
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tax_forecast_coeffs (
-                    factor TEXT,
+                    tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (factor, item_id, date, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, feature_name)
                 );
             """)
             
-            # 4. Coeffs no intercept
+            # 3. Coeffs no intercept
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tax_forecast_coeffs_no_intercept (
-                    factor TEXT,
+                    tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (factor, item_id, date, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, feature_name)
                 );
             """)
             
-            # 5. Ensemble info
+            # 4. Ensemble info
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tax_forecast_ensemble_weights (
-                    factor TEXT,
+                    tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
                     target TEXT,
                     model_name TEXT,
                     weight FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (factor, item_id, date, target, model_name)
+                    PRIMARY KEY (tax_item, item_id, date, target, model_name)
                 );
             """)
         conn.commit()
@@ -113,9 +131,16 @@ def init_db():
 def parse_filename(filename: str):
     """
     Parses filename like 'Налог на прибыль_E110000 - ПАО ГМК Норильский никель_predict_BASE.xlsx'
-    Returns (factor, item_id)
+    Returns (tax_item, item_id)
     """
-    base = filename.replace('_predict_BASE.xlsx', '').replace('_predict_BASE.xls', '')
+    base = filename
+    if '_predict_BASE.xlsx' in filename:
+        base = filename.replace('_predict_BASE.xlsx', '')
+    elif '_predict_BASE+.xlsx' in filename:
+        base = filename.replace('_predict_BASE+.xlsx', '')
+    elif '.xlsx' in filename:
+        base = filename.replace('.xlsx', '')
+    
     # Split by first underscore only
     parts = base.split('_', 1)
     if len(parts) == 2:
@@ -123,71 +148,109 @@ def parse_filename(filename: str):
     return None, None
 
 def save_excel_to_db(filename: str, file_content: bytes):
-    factor, item_id = parse_filename(filename)
-    if not factor or not item_id:
-        raise ValueError(f"Could not parse factor and item_id from filename: {filename}")
-        
-    # Read Excel
-    xls = pd.ExcelFile(io.BytesIO(file_content))
+    logger.info(f"Начало сохранения файла в БД: {filename}")
+    tax_item, item_id = parse_filename(filename)
+    if not tax_item or not item_id:
+        logger.error(f"Не удалось распарсить имя файла: {filename}")
+        raise ValueError(f"Could not parse tax_item and item_id from filename: {filename}")
     
+    logger.info(f"Распарсено: tax_item='{tax_item}', item_id='{item_id}'")
+
+    # Read Excel
+    try:
+        xls = pd.ExcelFile(io.BytesIO(file_content))
+        logger.info(f"Excel файл прочитан успешно. Листы: {xls.sheet_names}")
+    except Exception as e:
+        logger.error(f"Ошибка при чтении Excel файла: {e}")
+        raise
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            # 1. Process 'data' sheet
+            # 1. Process 'data' sheet -> tax_forecast_data
             if 'data' in xls.sheet_names:
+                logger.info("Обработка листа 'data'...")
                 df = pd.read_excel(xls, 'data')
+                logger.info(f"Размер DataFrame 'data': {df.shape}")
                 
-                # 1.1 Facts
-                fact_records = []
-                pred_records = []
-                
-                for _, row in df.iterrows():
-                    date = row['Дата']
-                    fact = row.get('Разница Активов и Пассивов_fact')
-                    
-                    if pd.notna(fact):
-                        fact_records.append((factor, item_id, date, fact, datetime.now()))
-                    
-                    # 1.2 Predictions (all other columns)
-                    for col in df.columns:
-                        if col not in ['Дата', 'Разница Активов и Пассивов_fact']:
-                            val = row[col]
-                            if pd.notna(val):
-                                pred_records.append((factor, item_id, date, col, val, datetime.now()))
-                
-                if fact_records:
-                    # Remove duplicates from fact_records based on primary key (factor, item_id, date)
-                    # Keep the last occurrence (most recent update)
-                    unique_facts = {}
-                    for rec in fact_records:
-                        key = (rec[0], rec[1], rec[2]) # factor, item_id, date
-                        unique_facts[key] = rec
-                    fact_records_unique = list(unique_facts.values())
+                # 1. Strip prefix 'Разница Активов и Пассивов_'
+                rename_map = {}
+                for col in df.columns:
+                    if col.startswith('Разница Активов и Пассивов_'):
+                        rename_map[col] = col.replace('Разница Активов и Пассивов_', '')
+                if rename_map:
+                    df.rename(columns=rename_map, inplace=True)
 
-                    execute_values(cur, """
-                        INSERT INTO tax_forecast_facts (factor, item_id, date, fact_value, updated_at)
-                        VALUES %s
-                        ON CONFLICT (factor, item_id, date) 
-                        DO UPDATE SET fact_value = EXCLUDED.fact_value, updated_at = EXCLUDED.updated_at
-                    """, fact_records_unique)
+                # 2. Map legacy/specific model names to standard names (keys in COLUMN_MAPPING)
+                tax_model_mapping = {
+                    'predict_linreg6': 'predict_linreg6_with_bias',
+                    'predict_linreg9': 'predict_linreg9_with_bias',
+                    'predict_linreg12': 'predict_linreg12_with_bias',
+                    'predict_linreg_no_intercept6': 'predict_linreg6_no_bias',
+                    'predict_linreg_no_intercept9': 'predict_linreg9_no_bias',
+                    'predict_linreg_no_intercept12': 'predict_linreg12_no_bias',
+                    'predict_ML': 'predict_TS_ML',
+                    'predict_stacking': 'predict_stacking_RFR'
+                }
                 
-                if pred_records:
-                    # Remove duplicates from pred_records based on primary key (factor, item_id, date, metric_name)
-                    unique_preds = {}
-                    for rec in pred_records:
-                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, metric_name
-                        unique_preds[key] = rec
-                    pred_records_unique = list(unique_preds.values())
+                full_tax_mapping = {}
+                for old, new in tax_model_mapping.items():
+                    full_tax_mapping[old] = new
+                    full_tax_mapping[f"{old} разница"] = f"{new} разница"
+                    full_tax_mapping[f"{old} отклонение %"] = f"{new} отклонение %"
+                
+                df.rename(columns=full_tax_mapping, inplace=True)
+                
+                # 3. Apply standard mapping
+                df.rename(columns=COLUMN_MAPPING, inplace=True)
+                
+                # Add metadata columns
+                df['tax_item'] = tax_item
+                df['item_id'] = item_id
+                df['updated_at'] = datetime.now()
+                
+                # Convert NaNs to None
+                df = df.where(pd.notnull(df), None)
+                
+                # Filter columns to ensure they exist in DB
+                # Base known columns
+                valid_columns = {'tax_item', 'item_id', 'date', 'fact', 'updated_at'}
+                valid_columns.update(set(COLUMN_MAPPING.values()) - EXCLUDED_FROM_DATA_TABLE)
+                
+                # Only keep columns that are in valid_columns
+                # Note: df.columns are already renamed using mapping
+                columns_to_keep = [c for c in df.columns if c in valid_columns]
+                
+                if len(columns_to_keep) < len(df.columns):
+                     skipped = set(df.columns) - set(columns_to_keep)
+                     logger.warning(f"Пропущены колонки (нет в схеме БД): {skipped}")
 
-                    execute_values(cur, """
-                        INSERT INTO tax_forecast_predictions (factor, item_id, date, metric_name, value, updated_at)
-                        VALUES %s
-                        ON CONFLICT (factor, item_id, date, metric_name) 
-                        DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-                    """, pred_records_unique)
+                df = df[columns_to_keep]
+                columns_to_insert = list(df.columns)
+                
+                cols_str = ', '.join([f'"{c}"' for c in columns_to_insert])
+                
+                # Exclude primary key columns from UPDATE
+                update_set_list = [f'"{c}" = EXCLUDED."{c}"' for c in columns_to_insert if c not in ('tax_item', 'item_id', 'date')]
+                update_set = ', '.join(update_set_list) if update_set_list else ""
+                
+                query = f"""
+                    INSERT INTO tax_forecast_data ({cols_str})
+                    VALUES %s
+                    ON CONFLICT (tax_item, item_id, date) 
+                    DO UPDATE SET {update_set}
+                """
+                
+                data_values = [tuple(x) for x in df.to_numpy()]
+                if data_values:
+                    execute_values(cur, query, data_values)
+                    logger.info(f"Вставлено/обновлено {len(data_values)} строк в tax_forecast_data")
+            else:
+                logger.warning("Лист 'data' не найден!")
 
             # 2. Process 'coeffs' sheet
             if 'coeffs' in xls.sheet_names:
+                logger.info("Обработка листа 'coeffs'...")
                 df = pd.read_excel(xls, 'coeffs')
                 records = []
                 for _, row in df.iterrows():
@@ -196,25 +259,26 @@ def save_excel_to_db(filename: str, file_content: bytes):
                         if col != 'Дата':
                             val = row[col]
                             if pd.notna(val):
-                                records.append((factor, item_id, date, col, val, datetime.now()))
+                                records.append((tax_item, item_id, date, col, val, datetime.now()))
                 
                 if records:
-                    # Remove duplicates
                     unique_coeffs = {}
                     for rec in records:
-                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, feature_name
+                        key = (rec[0], rec[1], rec[2], rec[3])
                         unique_coeffs[key] = rec
                     records_unique = list(unique_coeffs.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs (factor, item_id, date, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs (tax_item, item_id, date, feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (factor, item_id, date, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
+                    logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs")
 
             # 3. Process 'coeffs_no_intercept' sheet
             if 'coeffs_no_intercept' in xls.sheet_names:
+                logger.info("Обработка листа 'coeffs_no_intercept'...")
                 df = pd.read_excel(xls, 'coeffs_no_intercept')
                 records = []
                 for _, row in df.iterrows():
@@ -223,25 +287,26 @@ def save_excel_to_db(filename: str, file_content: bytes):
                         if col != 'Дата':
                             val = row[col]
                             if pd.notna(val):
-                                records.append((factor, item_id, date, col, val, datetime.now()))
+                                records.append((tax_item, item_id, date, col, val, datetime.now()))
                 
                 if records:
-                    # Remove duplicates
                     unique_coeffs_ni = {}
                     for rec in records:
-                        key = (rec[0], rec[1], rec[2], rec[3]) # factor, item_id, date, feature_name
+                        key = (rec[0], rec[1], rec[2], rec[3])
                         unique_coeffs_ni[key] = rec
                     records_unique = list(unique_coeffs_ni.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs_no_intercept (factor, item_id, date, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs_no_intercept (tax_item, item_id, date, feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (factor, item_id, date, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
+                    logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs_no_intercept")
 
             # 4. Process 'TimeSeries_ensemble_models_info' sheet
             if 'TimeSeries_ensemble_models_info' in xls.sheet_names:
+                logger.info("Обработка листа 'TimeSeries_ensemble_models_info'...")
                 df = pd.read_excel(xls, 'TimeSeries_ensemble_models_info')
                 records = []
                 for _, row in df.iterrows():
@@ -251,84 +316,109 @@ def save_excel_to_db(filename: str, file_content: bytes):
                     
                     if isinstance(info_val, str):
                         try:
-                            # Try standard JSON first
                             info_val = json.loads(info_val)
                         except json.JSONDecodeError:
                             try:
-                                # Fallback for single quotes (legacy data)
                                 info_val = json.loads(info_val.replace("'", '"'))
                             except Exception as e:
-                                logger.warning(f"Failed to parse ensemble info for {factor}|{item_id}|{date}: {e}")
                                 pass 
                     
                     if isinstance(info_val, dict):
                         for model_name, weight in info_val.items():
-                            records.append((factor, item_id, date, target, model_name, weight, datetime.now()))
+                            records.append((tax_item, item_id, date, target, model_name, weight, datetime.now()))
                 
                 if records:
-                    # Remove duplicates
                     unique_weights = {}
                     for rec in records:
-                        key = (rec[0], rec[1], rec[2], rec[3], rec[4]) # factor, item_id, date, target, model_name
+                        key = (rec[0], rec[1], rec[2], rec[3], rec[4])
                         unique_weights[key] = rec
                     records_unique = list(unique_weights.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_ensemble_weights (factor, item_id, date, target, model_name, weight, updated_at)
+                        INSERT INTO tax_forecast_ensemble_weights (tax_item, item_id, date, target, model_name, weight, updated_at)
                         VALUES %s
-                        ON CONFLICT (factor, item_id, date, target, model_name) 
+                        ON CONFLICT (tax_item, item_id, date, target, model_name) 
                         DO UPDATE SET weight = EXCLUDED.weight, updated_at = EXCLUDED.updated_at
                     """, records_unique)
+                    logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_ensemble_weights")
                 
         conn.commit()
+        logger.info(f"Файл {filename} успешно сохранен в БД")
     except Exception as e:
-        logger.error(f"Error saving excel to DB: {e}")
+        logger.error(f"Error saving excel to DB: {e}", exc_info=True)
         conn.rollback()
         raise
     finally:
         conn.close()
 
-def restore_excel_from_db(factor: str, item_id: str) -> bytes:
+def restore_excel_from_db(tax_item: str, item_id: str) -> bytes:
     engine = get_db_engine()
     dataframes = {}
     
     try:
         with engine.connect() as conn:
-            # 1. Data
-            # Get facts
-            df_facts = pd.read_sql(text("""
-                SELECT date as "Дата", fact_value as "Разница Активов и Пассивов_fact"
-                FROM tax_forecast_facts
-                WHERE factor = :factor AND item_id = :item_id
-            """), conn, params={"factor": factor, "item_id": item_id})
+            # 1. Data -> From tax_forecast_data
+            df_data = pd.read_sql(text("""
+                SELECT *
+                FROM tax_forecast_data
+                WHERE tax_item = :tax_item AND item_id = :item_id
+            """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
-            # Get predictions
-            df_preds_long = pd.read_sql(text("""
-                SELECT date as "Дата", metric_name, value
-                FROM tax_forecast_predictions
-                WHERE factor = :factor AND item_id = :item_id
-            """), conn, params={"factor": factor, "item_id": item_id})
-            
-            if not df_preds_long.empty:
-                df_preds = df_preds_long.pivot(index='Дата', columns='metric_name', values='value').reset_index()
-                # Merge
-                if not df_facts.empty:
-                    df_data = pd.merge(df_facts, df_preds, on='Дата', how='outer')
-                else:
-                    df_data = df_preds
-            else:
-                df_data = df_facts
-                
             if not df_data.empty:
-                df_data = df_data.sort_values('Дата')
+                # 1. Drop metadata
+                cols_to_drop = ['tax_item', 'item_id', 'updated_at']
+                df_data.drop(columns=[c for c in cols_to_drop if c in df_data.columns], inplace=True)
+                
+                # 2. Reverse DB -> Standard Name
+                df_data.rename(columns=REVERSE_COLUMN_MAPPING, inplace=True)
+                
+                # 3. Reverse Standard Name -> Legacy Tax Name
+                tax_model_mapping = {
+                    'predict_linreg6': 'predict_linreg6_with_bias',
+                    'predict_linreg9': 'predict_linreg9_with_bias',
+                    'predict_linreg12': 'predict_linreg12_with_bias',
+                    'predict_linreg_no_intercept6': 'predict_linreg6_no_bias',
+                    'predict_linreg_no_intercept9': 'predict_linreg9_no_bias',
+                    'predict_linreg_no_intercept12': 'predict_linreg12_no_bias',
+                    'predict_ML': 'predict_TS_ML',
+                    'predict_stacking': 'predict_stacking_RFR'
+                }
+                
+                tax_model_reverse = {}
+                for old, new in tax_model_mapping.items():
+                    tax_model_reverse[new] = old
+                    tax_model_reverse[f"{new} разница"] = f"{old} разница"
+                    tax_model_reverse[f"{new} отклонение %"] = f"{old} отклонение %"
+
+                df_data.rename(columns=tax_model_reverse, inplace=True)
+                
+                # 4. Add Prefix 'Разница Активов и Пассивов_'
+                prefix = 'Разница Активов и Пассивов_'
+                final_rename = {}
+                for col in df_data.columns:
+                    if col == 'Дата': 
+                        continue
+                    if col == 'Fact': # 'Fact' comes from REVERSE_COLUMN_MAPPING
+                         final_rename[col] = f'{prefix}fact' 
+                    elif col == 'fact': # If it somehow stayed lowercase
+                         final_rename[col] = f'{prefix}fact'
+                    else:
+                         final_rename[col] = f'{prefix}{col}'
+                
+                df_data.rename(columns=final_rename, inplace=True)
+                
+                if 'Дата' in df_data.columns:
+                    df_data.sort_values('Дата', inplace=True)
+                
+                df_data.dropna(axis=1, how='all', inplace=True)
                 dataframes['data'] = df_data
             
             # 2. Coeffs
             df_coeffs_long = pd.read_sql(text("""
                 SELECT date as "Дата", feature_name, value
                 FROM tax_forecast_coeffs 
-                WHERE factor = :factor AND item_id = :item_id
-            """), conn, params={"factor": factor, "item_id": item_id})
+                WHERE tax_item = :tax_item AND item_id = :item_id
+            """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
             if not df_coeffs_long.empty:
                 df_coeffs = df_coeffs_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
@@ -339,8 +429,8 @@ def restore_excel_from_db(factor: str, item_id: str) -> bytes:
             df_coeffs_ni_long = pd.read_sql(text("""
                 SELECT date as "Дата", feature_name, value
                 FROM tax_forecast_coeffs_no_intercept 
-                WHERE factor = :factor AND item_id = :item_id
-            """), conn, params={"factor": factor, "item_id": item_id})
+                WHERE tax_item = :tax_item AND item_id = :item_id
+            """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
             if not df_coeffs_ni_long.empty:
                 df_coeffs_ni = df_coeffs_ni_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
@@ -351,17 +441,14 @@ def restore_excel_from_db(factor: str, item_id: str) -> bytes:
             df_weights_long = pd.read_sql(text("""
                 SELECT date as "Дата", target as "Статья", model_name, weight
                 FROM tax_forecast_ensemble_weights 
-                WHERE factor = :factor AND item_id = :item_id
-            """), conn, params={"factor": factor, "item_id": item_id})
+                WHERE tax_item = :tax_item AND item_id = :item_id
+            """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
             if not df_weights_long.empty:
-                # Need to reconstruct the dict structure: {'model': weight, ...}
-                # Group by Date and Target
                 records = []
                 grouped = df_weights_long.groupby(['Дата', 'Статья'])
                 for (date, target), group in grouped:
                     weights = dict(zip(group['model_name'], group['weight']))
-                    # Serialize to JSON string to match save format
                     records.append({'Дата': date, 'Статья': target, 'Ансамбль': json.dumps(weights, ensure_ascii=False)})
                 
                 df_info = pd.DataFrame(records)
@@ -388,7 +475,7 @@ def get_all_forecast_pairs():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT factor, item_id FROM tax_forecast_facts")
+            cur.execute("SELECT DISTINCT tax_item, item_id FROM tax_forecast_data")
             return cur.fetchall()
     except Exception as e:
         logger.error(f"Error getting forecast pairs: {e}")

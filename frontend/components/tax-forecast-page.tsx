@@ -442,6 +442,12 @@ export function TaxForecastPage() {
                           message: lastStatus.message || `Ошибка: ${lastStatus.error}`,
                           completedAt: lastStatus.completed_at
                       })
+                  } else if (lastStatus.status === 'revoked') {
+                      setStatus({
+                          state: "idle",
+                          message: lastStatus.message || "Прогноз остановлен",
+                          completedAt: lastStatus.completed_at
+                      })
                   }
               }
 

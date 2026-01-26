@@ -106,8 +106,21 @@ async def download_result(request: Request, task_id: str):
 @router.post("/stop/{task_id}")
 @require_authentication
 async def stop_forecast(request: Request, task_id: str):
-    celery_app.control.revoke(task_id, terminate=True)
+    res = AsyncResult(task_id)
+    if os.name == 'nt':  # Windows
+        res.revoke(terminate=True, signal='SIGTERM')
+    else:  # Linux/Unix
+        res.revoke(terminate=True, signal='SIGKILL')
+
     training_status_manager.clear_tax_task()
+    
+    # Save stopped status
+    training_status_manager.save_completed_tax_forecast({
+        'status': 'revoked',
+        'message': 'Прогноз был остановлен пользователем',
+        'completed_at': datetime.now().isoformat()
+    })
+    
     return {"status": "Task revoked"}
 
 @router.get("/active-task")
