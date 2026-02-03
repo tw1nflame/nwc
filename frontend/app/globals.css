@@ -48,6 +48,7 @@
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
+
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
@@ -78,6 +79,15 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+}
+
+/* Vega tooltip fix: ensure tooltips aren't clipped and appear above other UI */
+.vega-tooltip {
+  position: fixed !important;
+  z-index: 100000 !important;
+  pointer-events: auto !important;
+  max-width: 90vw !important;
+  white-space: normal !important;
 }
 
 @layer base {

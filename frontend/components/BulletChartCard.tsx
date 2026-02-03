@@ -3,8 +3,10 @@ import React, { useEffect, useState, useRef } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
-import Plot from "react-plotly.js";
+import dynamic from "next/dynamic";
 import { useConfig } from "../context/ConfigContext";
+
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 
 export interface BulletChartProps {
@@ -124,8 +126,8 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
       return {
         x: points.map(d => d.deviation),
         y: points.map(d => d.difference),
-        mode: 'markers',
-        type: 'scatter',
+        mode: 'markers' as const,
+        type: 'scatter' as const,
         name: article,
         marker: { color: articleColorMap[article], size: 12, symbol: 'circle' },
   text: points.map(d => d.model || ''),
@@ -138,29 +140,29 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
   const shapes = [
     // Горизонтальные линии (ось разницы)
     {
-      type: 'line',
-      xref: 'paper', yref: 'y',
+      type: 'line' as const,
+      xref: 'paper' as const, yref: 'y' as const,
       x0: 0, x1: 1, y0: diffMin, y1: diffMin,
-      line: { color: '#e74c3c', width: 2, dash: 'dot' },
+      line: { color: '#e74c3c', width: 2, dash: 'dot' as const },
     },
     {
-      type: 'line',
-      xref: 'paper', yref: 'y',
+      type: 'line' as const,
+      xref: 'paper' as const, yref: 'y' as const,
       x0: 0, x1: 1, y0: diffMax, y1: diffMax,
-      line: { color: '#e74c3c', width: 2, dash: 'dot' },
+      line: { color: '#e74c3c', width: 2, dash: 'dot' as const },
     },
     // Вертикальные линии (ось отклонения)
     {
-      type: 'line',
-      xref: 'x', yref: 'paper',
+      type: 'line' as const,
+      xref: 'x' as const, yref: 'paper' as const,
       x0: devMin, x1: devMin, y0: 0, y1: 1,
-      line: { color: '#f39c12', width: 2, dash: 'dot' },
+      line: { color: '#f39c12', width: 2, dash: 'dot' as const },
     },
     {
-      type: 'line',
-      xref: 'x', yref: 'paper',
+      type: 'line' as const,
+      xref: 'x' as const, yref: 'paper' as const,
       x0: devMax, x1: devMax, y0: 0, y1: 1,
-      line: { color: '#f39c12', width: 2, dash: 'dot' },
+      line: { color: '#f39c12', width: 2, dash: 'dot' as const },
     },
   ];
 
@@ -200,7 +202,7 @@ export const BulletChartCard: React.FC<BulletChartProps> = ({ data, loading, cur
                   shapes,
                   dragmode: 'zoom',
                 }}
-                config={{ responsive: true, displayModeBar: true, legendClick: false, legendDoubleClick: false }}
+                config={{ responsive: true, displayModeBar: true }}
                 style={{ width: '100%', height: '100%' }}
               />
             </div>

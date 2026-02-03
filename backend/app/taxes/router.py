@@ -13,6 +13,10 @@ from utils.training_status import training_status_manager
 
 from taxes.db import get_all_forecast_pairs, restore_excel_from_db
 from starlette.background import BackgroundTask
+import pandas as pd
+import io
+from utils.config import load_config
+from utils.excel_formatter import save_dataframes_to_excel
 
 def cleanup_file(path: str):
     try:
@@ -156,12 +160,95 @@ async def export_excel(request: Request):
         if not forecast_pairs:
              raise HTTPException(status_code=404, detail="No forecast data found")
 
+        # Config loading
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config_path = os.path.join(base_dir, 'config_refined.yaml')
+        config = load_config(config_path)
+        tax_models_config = config.get('tax_forecast_models', {'default': 'naive'})
+        
+        summary_rows = []
+        target_col_base = 'Разница Активов и Пассивов'
+
         for factor, item_id in forecast_pairs:
             file_data = restore_excel_from_db(factor, item_id)
             if file_data:
                 filename = f"{factor}_{item_id}_predict.xlsx"
-                with open(os.path.join(temp_dir, filename), 'wb') as f:
+                file_path = os.path.join(temp_dir, filename)
+                with open(file_path, 'wb') as f:
                     f.write(file_data)
+                
+                # --- Summary Processing ---
+                try:
+                    df = pd.read_excel(file_path)
+                    
+                    # Determine model from config
+                    # Default model if not found
+                    model = 'naive'
+                    
+                    # Normalizing config keys to lower case for case-insensitive lookup
+                    if isinstance(tax_models_config, dict):
+                        models_config_lower = {k.lower(): v for k, v in tax_models_config.items()}
+                        
+                        key = f"{factor} | {item_id}".lower()
+                        if key in models_config_lower:
+                            model = models_config_lower[key]
+                        elif 'default' in models_config_lower:
+                             model = models_config_lower['default']
+
+                    # Find prediction column dynamically
+                    prediction_col = None
+                    search_term = f"predict_{model}".lower()
+                    
+                    for col in df.columns:
+                        if target_col_base in col and search_term in col.lower():
+                            prediction_col = col
+                            break
+                    
+                    fact_col = f"{target_col_base}_fact"
+                    
+                    if prediction_col and 'Дата' in df.columns:
+                        df['Дата'] = pd.to_datetime(df['Дата'])
+                        
+                        for _, row in df.iterrows():
+                            predict_val = row.get(prediction_col)
+                            fact_val = row.get(fact_col)
+                            
+                            # Skip if both are missing? Or just keep going? 
+                            # Usually we want rows where we have predictions.
+                            if pd.isna(predict_val) and pd.isna(fact_val):
+                                continue
+
+                            diff = None
+                            dev_pct = None
+                            
+                            if pd.notna(predict_val) and pd.notna(fact_val):
+                                diff = fact_val - predict_val
+                                if fact_val != 0:
+                                    dev_pct = (fact_val - predict_val) / fact_val
+                            
+                            summary_rows.append({
+                                'Дата': row['Дата'],
+                                'Налог': factor,
+                                'Компания': item_id,
+                                'Модель': model,
+                                'Прогноз': predict_val,
+                                'Факт': fact_val,
+                                'Разница': diff,
+                                'Отклонение %': dev_pct
+                            })
+                except Exception as ex:
+                    print(f"Error processing summary for {filename}: {ex}")
+
+        # Save Summary File
+        if summary_rows:
+            summary_df = pd.DataFrame(summary_rows)
+            cols_order = ['Дата', 'Налог', 'Компания', 'Модель', 'Прогноз', 'Факт', 'Разница', 'Отклонение %']
+            summary_df = summary_df.reindex(columns=cols_order)
+            
+            summary_filename = "Результаты.xlsx"
+            summary_path = os.path.join(temp_dir, summary_filename)
+            save_dataframes_to_excel({'Результаты': summary_df}, summary_path)
+
         
         # Zip
         zip_name = f"tax_forecast_{timestamp}"

@@ -8,7 +8,7 @@ def generate_historical_data(filename="test_tax_history.xlsx"):
     print(f"Generating {filename}...")
     
     # Create dates (columns) - Month Year format (e.g. "январь 2020")
-    dates_dt = pd.date_range(start='2020-01-01', periods=48, freq='M')
+    dates_dt = pd.date_range(start='2020-01-01', periods=48+24, freq='M')
     month_names = {
         1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель', 5: 'май', 6: 'июнь',
         7: 'июль', 8: 'август', 9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
@@ -92,7 +92,7 @@ def generate_forecast_files(output_dir="generated_forecasts"):
     ]
     
     # Dates for forecast
-    dates_dt = pd.date_range(start='2020-01-01', periods=48, freq='M')
+    dates_dt = pd.date_range(start='2020-01-01', periods=48+24, freq='M')
     # Use datetime.date objects to ensure no time component in Excel
     dates = [d.date() for d in dates_dt]
     

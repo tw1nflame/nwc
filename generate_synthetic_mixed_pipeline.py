@@ -22,7 +22,7 @@ np.random.seed(42)
 
 # Параметры дат
 START_DATE = '2023-01-31'
-END_DATE = '2025-06-30'
+END_DATE = '2025-12-31'
 DATE_RANGE = pd.date_range(start=START_DATE, end=END_DATE, freq='M')
 N_MONTHS = len(DATE_RANGE)
 

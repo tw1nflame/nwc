@@ -119,7 +119,6 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {config?.allowed_tax_users?.some((email: string) => email.toLowerCase() === user?.email?.toLowerCase()) && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-gray-700 font-semibold">Налоги</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -147,7 +146,6 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        )}
 
         <SidebarGroup>
           <SidebarGroupContent>
