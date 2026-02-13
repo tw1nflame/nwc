@@ -208,12 +208,21 @@ async def root(request: Request):
 
 @app.get("/export_excel/")
 @require_authentication
-async def export_excel(request: Request):
+async def export_excel(request: Request, essential_only: bool = Query(False)):
     """
     Экспортирует таблицы Excel и возвращает файл из памяти.
+    If essential_only=True, exports only 'data', corrections and exchange rates (skips intermediate tables and final prediction).
     """
-    sheet_to_table = SHEET_TO_TABLE
-    excel_bytes = export_pipeline_tables_to_excel(sheet_to_table, make_final_prediction=True)
+    if essential_only:
+        # Only 'data' sheet from the main dict + adjustments/exchange rates (handled inside export func)
+        # We assume SHEET_TO_TABLE['data'] exists.
+        sheet_to_table = {'data': SHEET_TO_TABLE.get('data')}
+        make_final_prediction = False
+    else:
+        sheet_to_table = SHEET_TO_TABLE
+        make_final_prediction = True
+
+    excel_bytes = export_pipeline_tables_to_excel(sheet_to_table, make_final_prediction=make_final_prediction)
     filename = f"export_BASEPLUS_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
     return StreamingResponse(
         excel_bytes,

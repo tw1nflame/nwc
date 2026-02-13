@@ -4,7 +4,8 @@ import * as XLSX from "xlsx"
 export async function fetchExcelAndParseModels(arrayBuffer, accessToken) {
   if (!arrayBuffer) {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    const url = backendUrl.replace(/\/$/, '') + '/export_excel/';
+    // Use essential_only=true to download only necessary data (data sheet, corrections, rates) speeding up the process
+    const url = backendUrl.replace(/\/$/, '') + '/export_excel/?essential_only=true';
     const response = await fetch(url, {
       headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
     });

@@ -59,6 +59,41 @@ const VegaChart = ({ spec, title, data }: { spec: any, title?: string, data?: an
   )
 }
 
+const formatCellValue = (cell: any, header?: string) => {
+    if (cell === null || cell === undefined) return ""
+
+    if (header === 'rel_deviation') {
+        let num = typeof cell === 'number' ? cell : parseFloat(cell)
+        if (!isNaN(num)) {
+            return `${parseFloat((num * 100).toFixed(2))}%`
+        }
+    }
+
+    if (typeof cell === 'number') {
+        // Format to max 2 decimal places
+        if (Number.isInteger(cell)) return cell
+        return parseFloat(cell.toFixed(2))
+    }
+    if (typeof cell === 'string') {
+        // Check for YYYY-MM-DD HH:mm:ss
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(cell)) {
+             return cell.split(' ')[0]
+        }
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(cell)) {
+             return cell.split('T')[0]
+        }
+        // Check if string is a numeric value with decimal point (e.g. "123.456")
+        if (/^-?\d+\.\d+$/.test(cell)) {
+            const num = parseFloat(cell)
+            if (!isNaN(num)) {
+                 return parseFloat(num.toFixed(2))
+            }
+        }
+    }
+    if (typeof cell === 'object') return JSON.stringify(cell)
+    return String(cell)
+}
+
 // --- Helper: ChatMessage ---
 interface MessageProps {
     message: {
@@ -216,27 +251,27 @@ const ChatMessage = ({ message, token }: MessageProps) => {
                                         </button>
                                     )}
                                 </div>
-                                <div className="overflow-x-auto max-h-40">
+                                <div className="overflow-auto max-h-96">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="text-xs text-gray-700 bg-gray-50 uppercase sticky top-0">
+                                        <thead className="text-xs text-gray-700 bg-gray-50 uppercase sticky top-0 bg-white z-10">
                                             <tr>
                                                 {table.headers?.map((h: string, i: number) => (
-                                                    <th key={i} className="px-2 py-1 border-r last:border-r-0 border-gray-200">{h}</th>
+                                                    <th key={i} className="px-2 py-1 border-r last:border-r-0 border-gray-200 whitespace-nowrap">{h}</th>
                                                 ))}
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {table.rows?.slice(0, 10).map((row: any[], i: number) => ( // limit preview rows
+                                            {table.rows?.slice(0, 20).map((row: any[], i: number) => ( // limit preview rows
                                                 <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
                                                     {row.map((cell, j) => (
                                                         <td key={j} className="px-2 py-1 border-r last:border-r-0 border-gray-200 whitespace-nowrap">
-                                                            {typeof cell === 'object' ? JSON.stringify(cell) : String(cell)}
+                                                            {formatCellValue(cell, table.headers?.[j])}
                                                         </td>
                                                     ))}
                                                 </tr>
                                             ))}
-                                            {table.rows?.length > 10 && (
-                                                <tr><td colSpan={table.headers?.length} className="px-2 py-1 text-center italic text-gray-500">... {table.rows.length - 10} more rows ...</td></tr>
+                                            {table.rows?.length > 20 && (
+                                                <tr><td colSpan={table.headers?.length} className="px-2 py-1 text-center italic text-gray-500">... {table.rows.length - 20} more rows ...</td></tr>
                                             )}
                                         </tbody>
                                     </table>

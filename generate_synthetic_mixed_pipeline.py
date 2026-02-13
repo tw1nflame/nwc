@@ -12,6 +12,7 @@
 - Листы Tabular_ensemble_models_info, Tabular_feature_importance (для BASE+)
 
 Даты только как date (последний день месяца), без времени.
+Прогнозы генерируются с отклонением 2-7% от факта.
 """
 
 import os
@@ -69,35 +70,31 @@ ALL_PREDICT_COLS = sorted(list(set(BASE_COLS + BASEPLUS_COLS)))
 
 
 def generate_predictions(fact: np.ndarray, cols: list[str]) -> dict[str, np.ndarray]:
-    """Генерация синтетических предсказаний под заданные колонки."""
+    """
+    Генерация синтетических предсказаний.
+    Условие: отклонение от факта строго в диапазоне от 2% до 7% (в плюс или минус).
+    """
     data: dict[str, np.ndarray] = {}
+    n = len(fact)
+    
     for col in cols:
-        # Базовая: шум вокруг fact
-        noise_scale = 6.0
-        if 'autoARIMA' in col:
-            data[col] = fact * np.random.uniform(0.97, 1.03, N_MONTHS) + np.random.normal(0, noise_scale - 1, N_MONTHS)
-        elif 'TFT' in col:
-            data[col] = fact * np.random.uniform(0.95, 1.05, N_MONTHS) + np.random.normal(0, noise_scale, N_MONTHS)
-        elif 'PatchTST' in col or 'Chronos' in col:
-            data[col] = fact * np.random.uniform(0.98, 1.02, N_MONTHS) + np.random.normal(0, noise_scale - 2, N_MONTHS)
-        elif 'TS_tabular' in col:
-            data[col] = fact * np.random.uniform(0.96, 1.04, N_MONTHS) + np.random.normal(0, noise_scale, N_MONTHS)
-        elif 'TS_ML' in col:
-            data[col] = fact * np.random.uniform(0.96, 1.04, N_MONTHS) + np.random.normal(0, noise_scale - 1, N_MONTHS)
-        elif 'svm' in col:
-            data[col] = fact + np.random.normal(0, noise_scale + 2, N_MONTHS)
-        elif 'linreg' in col:
-            data[col] = fact * np.random.uniform(0.99, 1.01, N_MONTHS) + np.random.normal(0, noise_scale - 2, N_MONTHS)
-        elif 'stacking_RFR' in col:
-            data[col] = fact * np.random.uniform(0.98, 1.02, N_MONTHS) + np.random.normal(0, noise_scale - 1, N_MONTHS)
-        else:  # naive и прочие
-            data[col] = fact + np.random.normal(0, noise_scale, N_MONTHS)
+        # Генерируем процент отклонения от 0.02 (2%) до 0.07 (7%)
+        deviations_pct = np.random.uniform(0.02, 0.07, n)
+        
+        # Случайно выбираем направление отклонения (+1 или -1)
+        signs = np.random.choice([-1, 1], size=n)
+        
+        # Рассчитываем множитель: 1 +/- deviation
+        multipliers = 1 + (deviations_pct * signs)
+        
+        # Применяем к факту
+        data[col] = fact * multipliers
+        
     return data
 
 
 def main():
     rows: list[dict] = []
-    any_baseplus = False
 
     # Для каждой статьи и каждой даты генерируем и base, и base+ прогноз
     for article in ARTICLES:
@@ -128,14 +125,15 @@ def main():
                     pred_val = row[col]
                     row[f'{col} разница'] = (pred_val - row['Fact']) if pd.notna(pred_val) else np.nan
                     row[f'{col} отклонение  %'] = (
-                        100.0 * (pred_val - row['Fact']) / row['Fact']
+                        (pred_val - row['Fact']) / row['Fact']
                     ) if (pd.notna(pred_val) and row['Fact'] != 0) else np.nan
 
                 rows.append(row)
 
     # Собираем датафрейм
     df = pd.DataFrame(rows)
-    # Итоговый порядок колонок: Дата, Fact, все predict, их разницы, их отклонения, Статья, pipeline
+    
+    # Итоговый порядок колонок
     final_cols = (
         ['Дата', 'Fact']
         + ALL_PREDICT_COLS
@@ -144,6 +142,7 @@ def main():
         + ['Статья', 'pipeline']
     )
     df = df[final_cols]
+    
     # Дата — только date
     df['Дата'] = pd.to_datetime(df['Дата']).dt.date
 
@@ -157,12 +156,12 @@ def main():
     # Сохранение
     os.makedirs('results', exist_ok=True)
     out_path = 'results/synthetic_mixed_pipeline.xlsx'
+    
     with pd.ExcelWriter(out_path, engine='openpyxl') as writer:
-        # Лист data (даты только date)
-        df['Дата'] = pd.to_datetime(df['Дата']).dt.date
+        # Лист data
         df.to_excel(writer, index=False, sheet_name='data')
 
-        # Лист coeffs_with_intercept — для base и base+
+        # Лист coeffs_with_intercept
         coeffs_rows = []
         windows = [6, 9, 12]
         for pipeline in ['base', 'base+']:
@@ -181,10 +180,9 @@ def main():
                             'pipeline': pipeline
                         })
         coeffs_df = pd.DataFrame(coeffs_rows)
-        coeffs_df['Дата'] = pd.to_datetime(coeffs_df['Дата']).dt.date
         coeffs_df.to_excel(writer, index=False, sheet_name='coeffs_with_intercept')
 
-        # Лист coeffs_no_intercept — bias=0, для base и base+
+        # Лист coeffs_no_intercept
         coeffs_no_rows = []
         for pipeline in ['base', 'base+']:
             for article in ARTICLES:
@@ -202,10 +200,9 @@ def main():
                             'pipeline': pipeline
                         })
         coeffs_no_df = pd.DataFrame(coeffs_no_rows)
-        coeffs_no_df['Дата'] = pd.to_datetime(coeffs_no_df['Дата']).dt.date
         coeffs_no_df.to_excel(writer, index=False, sheet_name='coeffs_no_intercept')
 
-        # Лист TimeSeries_ensemble_models_info — для base и base+
+        # Лист TimeSeries_ensemble_models_info
         ensemble_models = [
             'predict_autoARIMA', 'predict_TFT', 'predict_PatchTST', 'predict_Chronos_base',
             'predict_TS_ML', 'predict_naive', 'predict_stacking_RFR'
@@ -227,10 +224,9 @@ def main():
                         'pipeline': pipeline
                     })
         ts_ens_df = pd.DataFrame(ts_ens_rows)
-        ts_ens_df['Дата'] = pd.to_datetime(ts_ens_df['Дата']).dt.date
         ts_ens_df.to_excel(writer, index=False, sheet_name='TimeSeries_ensemble_models_info')
 
-        # Лист Tabular_ensemble_models_info — только для base+
+        # Лист Tabular_ensemble_models_info
         tab_ens_rows = []
         for article in ARTICLES:
             for date in DATE_RANGE:
@@ -245,10 +241,9 @@ def main():
                     'pipeline': 'base+'
                 })
         tab_ens_df = pd.DataFrame(tab_ens_rows)
-        tab_ens_df['Дата'] = pd.to_datetime(tab_ens_df['Дата']).dt.date
         tab_ens_df.to_excel(writer, index=False, sheet_name='Tabular_ensemble_models_info')
 
-        # Лист Tabular_feature_importance — только для base+
+        # Лист Tabular_feature_importance
         tab_feat_rows = []
         for article in ARTICLES:
             for date in DATE_RANGE:
@@ -267,7 +262,6 @@ def main():
                         'pipeline': 'base+'
                     })
         tab_feat_df = pd.DataFrame(tab_feat_rows)
-        tab_feat_df['Дата'] = pd.to_datetime(tab_feat_df['Дата']).dt.date
         tab_feat_df.to_excel(writer, index=False, sheet_name='Tabular_feature_importance')
 
     print(f'Файл сохранён: {out_path}')
@@ -275,5 +269,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

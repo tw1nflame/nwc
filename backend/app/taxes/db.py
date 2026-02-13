@@ -411,6 +411,76 @@ def restore_excel_from_db(tax_item: str, item_id: str) -> bytes:
                     df_data.sort_values('Дата', inplace=True)
                 
                 df_data.dropna(axis=1, how='all', inplace=True)
+                
+                # Упорядочиваем колонки: Дата, факт, все прогнозы (в порядке создания), все разницы, все отклонения
+                ordered_cols = []
+                
+                # 1. Дата
+                if 'Дата' in df_data.columns:
+                    ordered_cols.append('Дата')
+                
+                # 2. Факт
+                fact_cols = [col for col in df_data.columns if col.endswith('_fact')]
+                ordered_cols.extend(fact_cols)
+                
+                # 3. Все predict колонки в порядке создания (как в forecast.py)
+                # Порядок моделей: naive, autoARIMA, ML, TFT, Chronos_base, svm (6,9,12), linreg (6,9,12), linreg_no_intercept (6,9,12), stacking
+                predict_order = [
+                    'predict_naive',
+                    'predict_autoARIMA',
+                    'predict_ML',
+                    'predict_TFT',
+                    'predict_Chronos_base',
+                    'predict_svm6',
+                    'predict_svm9',
+                    'predict_svm12',
+                    'predict_linreg6',
+                    'predict_linreg9',
+                    'predict_linreg12',
+                    'predict_linreg_no_intercept6',
+                    'predict_linreg_no_intercept9',
+                    'predict_linreg_no_intercept12',
+                    'predict_stacking'
+                ]
+                
+                # Собираем predict колонки в правильном порядке
+                predict_cols = []
+                for model_name in predict_order:
+                    matching_cols = [col for col in df_data.columns 
+                                    if model_name in col 
+                                    and ' разница' not in col 
+                                    and ' отклонение %' not in col]
+                    predict_cols.extend(matching_cols)
+                
+                # Добавляем predict колонки которые не попали в список (на случай новых моделей)
+                all_predict_cols = [col for col in df_data.columns 
+                                   if 'predict' in col 
+                                   and ' разница' not in col 
+                                   and ' отклонение %' not in col
+                                   and col not in predict_cols]
+                predict_cols.extend(all_predict_cols)
+                
+                ordered_cols.extend(predict_cols)
+                
+                # 4. Все разницы в том же порядке что и предикты
+                for pred_col in predict_cols:
+                    diff_col = f"{pred_col} разница"
+                    if diff_col in df_data.columns:
+                        ordered_cols.append(diff_col)
+                
+                # 5. Все отклонения % в том же порядке что и предикты
+                for pred_col in predict_cols:
+                    pct_col = f"{pred_col} отклонение %"
+                    if pct_col in df_data.columns:
+                        ordered_cols.append(pct_col)
+                
+                # Добавляем оставшиеся колонки (если есть)
+                remaining_cols = [col for col in df_data.columns if col not in ordered_cols]
+                ordered_cols.extend(remaining_cols)
+                
+                # Применяем порядок
+                df_data = df_data[ordered_cols]
+                
                 dataframes['data'] = df_data
             
             # 2. Coeffs
