@@ -87,11 +87,11 @@ def init_db():
                     tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
-                    window INTEGER,
+                    "window" INTEGER,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tax_item, item_id, date, window, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, "window", feature_name)
                 );
             """)
             
@@ -101,11 +101,11 @@ def init_db():
                     tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
-                    window INTEGER,
+                    "window" INTEGER,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tax_item, item_id, date, window, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, "window", feature_name)
                 );
             """)
             
@@ -276,9 +276,9 @@ def save_excel_to_db(filename: str, file_content: bytes):
                     records_unique = list(unique_coeffs.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs (tax_item, item_id, date, window, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs (tax_item, item_id, date, "window", feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (tax_item, item_id, date, window, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, "window", feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
                     logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs")
@@ -309,9 +309,9 @@ def save_excel_to_db(filename: str, file_content: bytes):
                     records_unique = list(unique_coeffs_ni.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs_no_intercept (tax_item, item_id, date, window, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs_no_intercept (tax_item, item_id, date, "window", feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (tax_item, item_id, date, window, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, "window", feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
                     logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs_no_intercept")
@@ -497,7 +497,7 @@ def restore_excel_from_db(tax_item: str, item_id: str) -> bytes:
             
             # 2. Coeffs
             df_coeffs_long = pd.read_sql(text("""
-                SELECT date as "Дата", window, feature_name, value
+                SELECT date as "Дата", "window", feature_name, value
                 FROM tax_forecast_coeffs 
                 WHERE tax_item = :tax_item AND item_id = :item_id
             """), conn, params={"tax_item": tax_item, "item_id": item_id})
@@ -509,7 +509,7 @@ def restore_excel_from_db(tax_item: str, item_id: str) -> bytes:
 
             # 3. Coeffs no intercept
             df_coeffs_ni_long = pd.read_sql(text("""
-                SELECT date as "Дата", window, feature_name, value
+                SELECT date as "Дата", "window", feature_name, value
                 FROM tax_forecast_coeffs_no_intercept 
                 WHERE tax_item = :tax_item AND item_id = :item_id
             """), conn, params={"tax_item": tax_item, "item_id": item_id})
