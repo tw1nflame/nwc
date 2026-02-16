@@ -87,10 +87,11 @@ def init_db():
                     tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
+                    window INTEGER,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tax_item, item_id, date, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, window, feature_name)
                 );
             """)
             
@@ -100,10 +101,11 @@ def init_db():
                     tax_item TEXT,
                     item_id TEXT,
                     date TIMESTAMP,
+                    window INTEGER,
                     feature_name TEXT,
                     value FLOAT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tax_item, item_id, date, feature_name)
+                    PRIMARY KEY (tax_item, item_id, date, window, feature_name)
                 );
             """)
             
@@ -255,23 +257,28 @@ def save_excel_to_db(filename: str, file_content: bytes):
                 records = []
                 for _, row in df.iterrows():
                     date = row['Дата']
+                    window = row.get('window', None)
+                    if window is None or pd.isna(window):
+                        logger.warning(f"Пропущена строка без window в coeffs для даты {date}")
+                        continue
+                    window = int(window)
                     for col in df.columns:
-                        if col != 'Дата':
+                        if col not in ('Дата', 'window'):
                             val = row[col]
                             if pd.notna(val):
-                                records.append((tax_item, item_id, date, col, val, datetime.now()))
+                                records.append((tax_item, item_id, date, window, col, val, datetime.now()))
                 
                 if records:
                     unique_coeffs = {}
                     for rec in records:
-                        key = (rec[0], rec[1], rec[2], rec[3])
+                        key = (rec[0], rec[1], rec[2], rec[3], rec[4])  # tax_item, item_id, date, window, feature_name
                         unique_coeffs[key] = rec
                     records_unique = list(unique_coeffs.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs (tax_item, item_id, date, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs (tax_item, item_id, date, window, feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (tax_item, item_id, date, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, window, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
                     logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs")
@@ -283,23 +290,28 @@ def save_excel_to_db(filename: str, file_content: bytes):
                 records = []
                 for _, row in df.iterrows():
                     date = row['Дата']
+                    window = row.get('window', None)
+                    if window is None or pd.isna(window):
+                        logger.warning(f"Пропущена строка без window в coeffs_no_intercept для даты {date}")
+                        continue
+                    window = int(window)
                     for col in df.columns:
-                        if col != 'Дата':
+                        if col not in ('Дата', 'window'):
                             val = row[col]
                             if pd.notna(val):
-                                records.append((tax_item, item_id, date, col, val, datetime.now()))
+                                records.append((tax_item, item_id, date, window, col, val, datetime.now()))
                 
                 if records:
                     unique_coeffs_ni = {}
                     for rec in records:
-                        key = (rec[0], rec[1], rec[2], rec[3])
+                        key = (rec[0], rec[1], rec[2], rec[3], rec[4])  # tax_item, item_id, date, window, feature_name
                         unique_coeffs_ni[key] = rec
                     records_unique = list(unique_coeffs_ni.values())
 
                     execute_values(cur, """
-                        INSERT INTO tax_forecast_coeffs_no_intercept (tax_item, item_id, date, feature_name, value, updated_at)
+                        INSERT INTO tax_forecast_coeffs_no_intercept (tax_item, item_id, date, window, feature_name, value, updated_at)
                         VALUES %s
-                        ON CONFLICT (tax_item, item_id, date, feature_name) 
+                        ON CONFLICT (tax_item, item_id, date, window, feature_name) 
                         DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
                     """, records_unique)
                     logger.info(f"Вставлено {len(records_unique)} записей в tax_forecast_coeffs_no_intercept")
@@ -485,26 +497,26 @@ def restore_excel_from_db(tax_item: str, item_id: str) -> bytes:
             
             # 2. Coeffs
             df_coeffs_long = pd.read_sql(text("""
-                SELECT date as "Дата", feature_name, value
+                SELECT date as "Дата", window, feature_name, value
                 FROM tax_forecast_coeffs 
                 WHERE tax_item = :tax_item AND item_id = :item_id
             """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
             if not df_coeffs_long.empty:
-                df_coeffs = df_coeffs_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
-                df_coeffs = df_coeffs.sort_values('Дата')
+                df_coeffs = df_coeffs_long.pivot(index=['Дата', 'window'], columns='feature_name', values='value').reset_index()
+                df_coeffs = df_coeffs.sort_values(['Дата', 'window'])
                 dataframes['coeffs'] = df_coeffs
 
             # 3. Coeffs no intercept
             df_coeffs_ni_long = pd.read_sql(text("""
-                SELECT date as "Дата", feature_name, value
+                SELECT date as "Дата", window, feature_name, value
                 FROM tax_forecast_coeffs_no_intercept 
                 WHERE tax_item = :tax_item AND item_id = :item_id
             """), conn, params={"tax_item": tax_item, "item_id": item_id})
             
             if not df_coeffs_ni_long.empty:
-                df_coeffs_ni = df_coeffs_ni_long.pivot(index='Дата', columns='feature_name', values='value').reset_index()
-                df_coeffs_ni = df_coeffs_ni.sort_values('Дата')
+                df_coeffs_ni = df_coeffs_ni_long.pivot(index=['Дата', 'window'], columns='feature_name', values='value').reset_index()
+                df_coeffs_ni = df_coeffs_ni.sort_values(['Дата', 'window'])
                 dataframes['coeffs_no_intercept'] = df_coeffs_ni
 
             # 4. Ensemble info

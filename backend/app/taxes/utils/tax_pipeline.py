@@ -425,7 +425,7 @@ def get_RFR_predict(WINDOWS, all_models, TARGET_COLUMN, MONTHES_TO_PREDICT):
         df_train = all_models.loc[all_models['Дата'] < pred_month_end]
         df_test = all_models.loc[all_models['Дата'] == pred_month_end]
         
-        data = df_train.drop(columns=['Дата']).dropna(subset=[f'{TARGET_COLUMN}_predict_ML'])
+        data = df_train[features_for_stacking].drop(columns=['Дата']).dropna(subset=[f'{TARGET_COLUMN}_predict_ML'])
         
         X = data.drop(columns=[f'{TARGET_COLUMN}_fact']) 
         y = data[f'{TARGET_COLUMN}_fact']
@@ -435,7 +435,7 @@ def get_RFR_predict(WINDOWS, all_models, TARGET_COLUMN, MONTHES_TO_PREDICT):
         model = RandomForestRegressor(random_state=SEED)    #LinearRegression()   #Ridge(alpha=5.0)
         model.fit(X_train, y_train)
         
-        X_pred = df_test.drop(columns=['Дата', f'{TARGET_COLUMN}_fact'])
+        X_pred = df_test[features_for_stacking].drop(columns=['Дата', f'{TARGET_COLUMN}_fact'])
         
         y_pred = model.predict(X_pred)
         all_models.loc[all_models['Дата'] == pred_month_end, f"{TARGET_COLUMN}_predict_stacking"] = y_pred
