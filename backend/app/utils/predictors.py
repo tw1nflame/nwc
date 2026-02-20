@@ -15,6 +15,7 @@ from sklearn.ensemble import RandomForestRegressor
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from autogluon.tabular import TabularPredictor
 from typing import List, Dict, Optional, Tuple
+import torch
 
 from utils.common import normalize_to_list
 
@@ -147,6 +148,14 @@ def train_and_predict_model(df_ts, target_column, model_path, metric, models_con
         print(f'Не удалось сделать прогноз из-за ошибки: {E}')
         predictions = pd.DataFrame()
         model_info = None
+    
+    # Очистка GPU памяти после обучения и предсказания
+    try:
+        del predictor
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception as e:
+        print(f'Предупреждение: не удалось очистить GPU память: {e}')
     
     return predictions, model_info
 
@@ -391,6 +400,14 @@ def generate_tabular_predictions(
             'predict': [prediction.iloc[0]]
         })
         all_predictions.append(prediction_df)
+        
+        # Очистка GPU памяти после каждого predictor
+        try:
+            del predictor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as e:
+            print(f'Предупреждение: не удалось очистить GPU память: {e}')
     
     # Объединение результатов
     predictions = pd.concat(all_predictions) if all_predictions else pd.DataFrame()

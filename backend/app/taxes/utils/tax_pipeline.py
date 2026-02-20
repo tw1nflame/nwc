@@ -18,6 +18,7 @@ from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from sklearn.ensemble import RandomForestRegressor
+import torch
 
 def get_df(path,  factor,  item_id,  standart_cols,  tech_cols,  FEATURES_FOR_LAG1, TRANSFORM_DATE_COLUMN, features_to_use, TARGET_COLUMN):
     df = pd.read_excel(path)
@@ -174,6 +175,14 @@ def predict_individual(
                     
                     # QUICK FIX FOR TODO
                     RESULT_DFS.append(result)
+
+                    # Очистка GPU памяти после обучения и предсказания
+                    try:
+                        del predictor
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                    except Exception as e:
+                        print(f'Предупреждение: не удалось очистить GPU память: {e}')
 
                     if delete_trained_model:
                         if os.path.exists(MODEL_PATH):
