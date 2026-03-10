@@ -107,7 +107,8 @@ interface MessageProps {
     token?: string | null;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const _CHAT_API_URL = process.env.NEXT_PUBLIC_CHAT_API_URL || "http://localhost:8002/api/v1"
+const BACKEND_URL = _CHAT_API_URL.replace(/\/api\/v1\/?$/, "")
 
 const ChatMessage = ({ message, token }: MessageProps) => {
     const isUser = message.role === "user"
