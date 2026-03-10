@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
+import { useConfig } from "@/context/ConfigContext"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import * as XLSX from "xlsx"
@@ -310,7 +311,11 @@ export function ChatAssistant() {
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const { session } = useAuth()
+  const { config } = useConfig()
   const scrollAreaRef = React.useRef<HTMLDivElement>(null)
+
+  const userEmail = session?.user?.email
+  const allowedUsers: string[] = config?.allowed_assistant_users ?? []
 
   // Load messages from localStorage on mount
   React.useEffect(() => {
@@ -404,6 +409,8 @@ export function ChatAssistant() {
         setIsLoading(false)
     }
   }
+
+  if (!userEmail || !allowedUsers.includes(userEmail)) return null
 
   return (
     <>

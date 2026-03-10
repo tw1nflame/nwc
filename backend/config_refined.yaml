@@ -1,6 +1,9 @@
 allowed_tax_users:
   - andrewhrapkov@yandex.ru
 
+allowed_assistant_users:
+  - andrewhrapkov@yandex.ru
+
 default_articles:
   - Торговая ДЗ
   - Прочая ДЗ
