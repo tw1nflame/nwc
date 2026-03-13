@@ -62,14 +62,14 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
     <Sidebar className="border-r border-gray-200 bg-white shadow-lg">
       <SidebarHeader className="p-6">
         <div className="mb-8">
-          <div className="mb-4 flex justify-center">
+          <div className="mb-4 w-full">
             <Image
               src="/logo.png"
               alt="Логотип"
               width={1930}
               height={934}
               priority
-              className="h-14 w-auto"
+              className="h-auto w-full"
             />
           </div>
           <div className="flex items-center gap-3">
