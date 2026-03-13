@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
 import { useConfig } from "@/context/ConfigContext"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { TechAccessPanel } from "./TechAccessPanel"
 import { motion, AnimatePresence } from "framer-motion"
 import { Activity, Settings, ChevronDown, ChevronUp, Database, Download, GraduationCap, BarChart3, FileDown, Calculator } from "lucide-react"
@@ -60,12 +61,24 @@ export function AppSidebar({ currentPage, onPageChange }: AppSidebarProps) {
   return (
     <Sidebar className="border-r border-gray-200 bg-white shadow-lg">
       <SidebarHeader className="p-6">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Activity className="w-6 h-6 text-white" />
+        <div className="mb-8">
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/logo.png"
+              alt="Логотип"
+              width={1930}
+              height={934}
+              priority
+              className="h-14 w-auto"
+            />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Базовое моделирование</h2>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Activity className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Базовое моделирование</h2>
+            </div>
           </div>
         </div>
       </SidebarHeader>
