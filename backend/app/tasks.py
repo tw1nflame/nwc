@@ -279,8 +279,16 @@ def run_tax_forecast_task(self, file_content_b64: str, filename: str, forecast_d
         return {'status': 'Completed'}
         
     except Exception as e:
+        print(f"ПРОИЗОШЛА ОШИБКА: {e}")
         logger.error(f"Task failed: {e}")
-        self.update_state(state='FAILURE', meta={'error': str(e)})
+        self.update_state(
+            state='FAILURE', 
+            meta={
+                'exc_type': type(e).__name__,
+                'exc_message': str(e),
+                'error': str(e)
+            }
+        )
         
         # Очищаем статус активной задачи при ошибке
         training_status_manager.clear_tax_task()
