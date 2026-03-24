@@ -296,7 +296,7 @@ def prepare_tax_data(initial_data_path='data/initial_input_data.xlsx'):
     clusters = []
     for group, companies in group_companies.items():
         group_df = delta_taxes.loc[delta_taxes['Группа'] == group]
-        companies_df = group_df.loc[group_df['Компания'].isin(companies)]
+        companies_df = group_df.loc[group_df['Компания'].isin(companies)].copy()
         companies_df['Кластер'] = companies_df['Компания']
         clusters.append(companies_df)
         

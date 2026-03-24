@@ -116,7 +116,7 @@ def forecast_taxes(CHOSEN_MONTH, group_companies, progress_callback=None):
             df = df.loc[(df['Группа'] == factor) & (df['Компания'] == item_id)]
             
             # for custom cols selection
-            df = df.loc[:, tech_cols + standart_cols + features_to_use + [TARGET_COLUMN]]
+            df = df.loc[:, tech_cols + standart_cols + features_to_use + [TARGET_COLUMN]].copy()
             df['Дата'] = df['Дата'] + MonthEnd(0)
             
             # корректировка для НДПИ и страховые взносы за апрель 2024
