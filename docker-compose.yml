@@ -10,7 +10,7 @@ services:
       - ./backend/.env
     depends_on:
       - redis
-      - supabase
+      - postgres
     ports:
       - "8000:8000"
 
@@ -25,7 +25,7 @@ services:
     depends_on:
       - backend
       - redis
-      - supabase
+      - postgres
     volumes:
       # <--- ИЗМЕНЕНИЕ ПУТИ
       - ./config_refined.yaml:/code/config_refined.yaml
@@ -47,9 +47,9 @@ services:
     ports:
       - "6379:6379"
 
-  supabase:
-    image: supabase/postgres:15.1.0.63
-    container_name: nwc-supabase
+  postgres:
+    image: postgres:15-alpine
+    container_name: nwc-postgres
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: admin
@@ -57,7 +57,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - supabase-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
-  supabase-data:
+  postgres-data:
+    name: supabase-data

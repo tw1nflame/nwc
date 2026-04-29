@@ -3,40 +3,27 @@
 import type React from "react"
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Activity, Eye, EyeOff, Lock, Mail, User, Building2 } from "lucide-react"
+import { Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/context/AuthContext"
-import { useRouter } from "next/navigation"
 
 
 
 export default function AuthPage() {
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Form states
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-
   const { login } = useAuth()
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
 
-    const { error } = await login(email, password)
-    if (!error) {
-      router.replace("/")
-    } else {
-      setError(error)
-    }
+    const { error } = await login()
+    if (error) setError(error)
     setLoading(false)
   }
 
@@ -71,46 +58,12 @@ export default function AuthPage() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-800 font-semibold">
-                    Email
+                  <Label className="text-gray-800 font-semibold">
+                    Авторизация
                   </Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="admin@company.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-gray-800 font-semibold">
-                    Пароль
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="admin123"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
+                  <p className="text-sm text-gray-600">
+                    Для входа используйте корпоративную учетную запись через Keycloak.
+                  </p>
                 </div>
 
                 {error && (
@@ -134,7 +87,7 @@ export default function AuthPage() {
                       Вход...
                     </div>
                   ) : (
-                    "Войти в систему"
+                    "Войти через Keycloak"
                   )}
                 </Button>
               </form>
